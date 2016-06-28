@@ -1,0 +1,1 @@
+javac -J-Xms16m -J-Xmx1024m -sourcepath f:\cc\src -cp F:\cc\jdk1.7.0_17\jre\lib\rt.jar -d f:\cc\jdk-class -g @jdk-src.txt >> log.txt 2>&1

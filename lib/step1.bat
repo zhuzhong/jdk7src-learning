@@ -1,0 +1,1 @@
+dir /B /S /X src\*.java >jdk-src.txt
