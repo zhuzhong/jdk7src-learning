@@ -17,6 +17,7 @@ import org.junit.Test;
  * BitSet用来保存大量的开关信息，数据结构如下： private long[] words = long[n];
  * long是8个字节长，64位，如果需要使用64个开关的话，n为1就可以了； 一般用开关数除64就可以得出n。
  * 
+ bitset简介 参见 http://shmilyaw-hotmail-com.iteye.com/blog/1741608
  * @author Administrator
  *
  */
