@@ -70,6 +70,7 @@ abstract class AbstractPlainDatagramSocketImpl extends DatagramSocketImpl
     static {
         java.security.AccessController.doPrivileged(
                   new sun.security.action.LoadLibraryAction("net"));
+        init();
     }
 
     /**
@@ -124,7 +125,7 @@ abstract class AbstractPlainDatagramSocketImpl extends DatagramSocketImpl
      * not connected already.
      */
     protected void disconnect() {
-        disconnect0(connectedAddress.family);
+        disconnect0(connectedAddress.holder().getFamily());
         connected = false;
         connectedAddress = null;
         connectedPort = -1;
@@ -362,4 +363,7 @@ abstract class AbstractPlainDatagramSocketImpl extends DatagramSocketImpl
     protected boolean nativeConnectDisabled() {
         return connectDisabled;
     }
+
+    native int dataAvailable();
+    private static native void init();
 }

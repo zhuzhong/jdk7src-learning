@@ -30,8 +30,6 @@ import java.io.*;
 import java.security.*;
 import sun.misc.Service;
 import sun.misc.ServiceConfigurationError;
-import sun.reflect.Reflection;
-import sun.security.util.SecurityConstants;
 
 /**
  * The <code>ScriptEngineManager</code> implements a discovery and instantiation
@@ -64,13 +62,7 @@ public class ScriptEngineManager  {
      */
     public ScriptEngineManager() {
         ClassLoader ctxtLoader = Thread.currentThread().getContextClassLoader();
-        if (canCallerAccessLoader(ctxtLoader)) {
-            if (DEBUG) System.out.println("using " + ctxtLoader);
-            init(ctxtLoader);
-        } else {
-            if (DEBUG) System.out.println("using bootstrap loader");
-            init(null);
-        }
+        init(ctxtLoader);
     }
 
     /**
@@ -93,15 +85,18 @@ public class ScriptEngineManager  {
         nameAssociations = new HashMap<String, ScriptEngineFactory>();
         extensionAssociations = new HashMap<String, ScriptEngineFactory>();
         mimeTypeAssociations = new HashMap<String, ScriptEngineFactory>();
-        AccessController.doPrivileged(new PrivilegedAction<Object>() {
-            public Object run() {
-                initEngines(loader);
-                return null;
-            }
-        });
+        List<ScriptEngineFactory> facList = AccessController.doPrivileged(
+            new PrivilegedAction<List<ScriptEngineFactory>>() {
+                public List<ScriptEngineFactory> run() {
+                    return initEngines(loader);
+                }
+            });
+        for (ScriptEngineFactory fac : facList) {
+            engineSpis.add(fac);
+        }
     }
 
-    private void initEngines(final ClassLoader loader) {
+    private List<ScriptEngineFactory> initEngines(final ClassLoader loader) {
         Iterator itr = null;
         try {
             if (loader != null) {
@@ -118,14 +113,15 @@ public class ScriptEngineManager  {
             // do not throw any exception here. user may want to
             // manage his/her own factories using this manager
             // by explicit registratation (by registerXXX) methods.
-            return;
+            return null;
         }
 
+        final List<ScriptEngineFactory> facList = new ArrayList<>();
         try {
             while (itr.hasNext()) {
                 try {
                     ScriptEngineFactory fact = (ScriptEngineFactory) itr.next();
-                    engineSpis.add(fact);
+                    facList.add(fact);
                 } catch (ServiceConfigurationError err) {
                     System.err.println("ScriptEngineManager providers.next(): "
                                  + err.getMessage());
@@ -145,8 +141,8 @@ public class ScriptEngineManager  {
             // do not throw any exception here. user may want to
             // manage his/her own factories using this manager
             // by explicit registratation (by registerXXX) methods.
-            return;
         }
+        return facList;
     }
 
     /**
@@ -418,42 +414,4 @@ public class ScriptEngineManager  {
 
     /** Global bindings associated with script engines created by this manager. */
     private Bindings globalScope;
-
-    private boolean canCallerAccessLoader(ClassLoader loader) {
-        SecurityManager sm = System.getSecurityManager();
-        if (sm != null) {
-            ClassLoader callerLoader = getCallerClassLoader();
-            if (callerLoader != null) {
-                if (loader != callerLoader || !isAncestor(loader, callerLoader)) {
-                    try {
-                        sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
-                    } catch (SecurityException exp) {
-                        if (DEBUG) exp.printStackTrace();
-                        return false;
-                    }
-                } // else fallthru..
-            } // else fallthru..
-        } // else fallthru..
-
-        return true;
-    }
-
-    // Note that this code is same as ClassLoader.getCallerClassLoader().
-    // But, that method is package private and hence we can't call here.
-    private ClassLoader getCallerClassLoader() {
-        Class caller = Reflection.getCallerClass(3);
-        if (caller == null) {
-            return null;
-        }
-        return caller.getClassLoader();
-    }
-
-    // is cl1 ancestor of cl2?
-    private boolean isAncestor(ClassLoader cl1, ClassLoader cl2) {
-        do {
-            cl2 = cl2.getParent();
-            if (cl1 == cl2) return true;
-        } while (cl2 != null);
-        return false;
-    }
 }

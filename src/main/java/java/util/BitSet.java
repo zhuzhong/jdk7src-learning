@@ -435,10 +435,9 @@ public class BitSet implements Cloneable, java.io.Serializable {
         if (bitIndex < 0)
             throw new IndexOutOfBoundsException("bitIndex < 0: " + bitIndex);
 
-        int wordIndex = wordIndex(bitIndex);   // 找到bitIndex应当存储在数组的坐标
+        int wordIndex = wordIndex(bitIndex);
         expandTo(wordIndex);
-		//在相应的数组坐标对应的数，找到相应的位 对应的位置,参见
-		//http://shmilyaw-hotmail-com.iteye.com/blog/1741608
+
         words[wordIndex] |= (1L << bitIndex); // Restores invariants
 
         checkInvariants();

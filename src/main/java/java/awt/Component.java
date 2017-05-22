@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -150,7 +150,7 @@ import sun.util.logging.PlatformLogger;
  *    import java.awt.event.*;
  *    import java.io.Serializable;
  *
- *    class MyApp java.io.Serializable
+ *    class MyApp implements java.io.Serializable
  *    {
  *         BigObjectThatShouldNotBeSerializedWithAButton bigOne;
  *         Button aButton = new Button();
@@ -971,6 +971,10 @@ public abstract class Component implements ImageObserver, MenuContainer,
 
             public AccessControlContext getAccessControlContext(Component comp) {
                 return comp.getAccessControlContext();
+            }
+
+            public void revalidateSynchronously(Component comp) {
+                comp.revalidateSynchronously();
             }
         });
     }
@@ -2963,6 +2967,13 @@ public abstract class Component implements ImageObserver, MenuContainer,
      * @since 1.7
      */
     public void revalidate() {
+        revalidateSynchronously();
+    }
+
+    /**
+     * Revalidates the component synchronously.
+     */
+    final void revalidateSynchronously() {
         synchronized (getTreeLock()) {
             invalidate();
 
@@ -3383,7 +3394,7 @@ public abstract class Component implements ImageObserver, MenuContainer,
                 (width > 0) && (height > 0)) {
                 PaintEvent e = new PaintEvent(this, PaintEvent.UPDATE,
                                               new Rectangle(x, y, width, height));
-                Toolkit.getEventQueue().postEvent(e);
+                SunToolkit.postEvent(SunToolkit.targetToAppContext(this), e);
             }
         }
     }
@@ -7911,7 +7922,7 @@ public abstract class Component implements ImageObserver, MenuContainer,
                 res = toFocus.requestFocusInWindow(CausedFocusEvent.Cause.TRAVERSAL_BACKWARD);
             }
         }
-        if (!res) {
+        if (clearOnFailure && !res) {
             if (focusLog.isLoggable(PlatformLogger.FINER)) {
                 focusLog.finer("clear global focus owner");
             }

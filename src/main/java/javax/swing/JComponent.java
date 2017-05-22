@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -63,6 +63,7 @@ import javax.swing.plaf.*;
 import static javax.swing.ClientPropertyKey.*;
 import javax.accessibility.*;
 
+import sun.awt.SunToolkit;
 import sun.swing.SwingUtilities2;
 import sun.swing.UIClientPropertyKey;
 
@@ -2636,17 +2637,16 @@ public abstract class JComponent extends Container implements Serializable,
      *    attribute: visualUpdate true
      */
     public void setVisible(boolean aFlag) {
-        if(aFlag != isVisible()) {
+        if (aFlag != isVisible()) {
             super.setVisible(aFlag);
-            Container parent = getParent();
-            if(parent != null) {
-                Rectangle r = getBounds();
-                parent.repaint(r.x,r.y,r.width,r.height);
+            if (aFlag) {
+                Container parent = getParent();
+                if (parent != null) {
+                    Rectangle r = getBounds();
+                    parent.repaint(r.x, r.y, r.width, r.height);
+                }
+                revalidate();
             }
-            // Some (all should) LayoutManagers do not consider components
-            // that are not visible. As such we need to revalidate when the
-            // visible bit changes.
-            revalidate();
         }
     }
 
@@ -3687,7 +3687,6 @@ public abstract class JComponent extends Container implements Serializable,
             super();
         }
 
-        protected ContainerListener accessibleContainerHandler = null;
         protected FocusListener accessibleFocusHandler = null;
 
         /**
@@ -3991,6 +3990,17 @@ public abstract class JComponent extends Container implements Serializable,
          * @since 1.4
          */
         public AccessibleKeyBinding getAccessibleKeyBinding() {
+            // Try to get the linked label's mnemonic if it exists
+            Object o = getClientProperty(JLabel.LABELED_BY_PROPERTY);
+            if (o instanceof Accessible){
+                AccessibleContext ac = ((Accessible) o).getAccessibleContext();
+                if (ac != null){
+                    AccessibleComponent comp = ac.getAccessibleComponent();
+                    if (! (comp instanceof AccessibleExtendedComponent))
+                        return null;
+                    return ((AccessibleExtendedComponent)comp).getAccessibleKeyBinding();
+                }
+            }
             return null;
         }
     } // inner class AccessibleJComponent
@@ -4792,7 +4802,8 @@ public abstract class JComponent extends Container implements Serializable,
      * @see RepaintManager#addDirtyRegion
      */
     public void repaint(long tm, int x, int y, int width, int height) {
-        RepaintManager.currentManager(this).addDirtyRegion(this, x, y, width, height);
+        RepaintManager.currentManager(SunToolkit.targetToAppContext(this))
+                      .addDirtyRegion(this, x, y, width, height);
     }
 
 
@@ -4847,7 +4858,7 @@ public abstract class JComponent extends Container implements Serializable,
             // which was causing some people grief.
             return;
         }
-        if (SwingUtilities.isEventDispatchThread()) {
+        if (SunToolkit.isDispatchThreadForAppContext(this)) {
             invalidate();
             RepaintManager.currentManager(this).addInvalidComponent(this);
         }
@@ -4869,7 +4880,7 @@ public abstract class JComponent extends Container implements Serializable,
                     revalidate();
                 }
             };
-            SwingUtilities.invokeLater(callRevalidate);
+            SunToolkit.executeOnEventHandlerThread(this, callRevalidate);
         }
     }
 
@@ -5562,6 +5573,24 @@ public abstract class JComponent extends Container implements Serializable,
         ",maximumSize=" + maximumSizeString +
         ",minimumSize=" + minimumSizeString +
         ",preferredSize=" + preferredSizeString;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Deprecated
+    public void hide() {
+        boolean showing = isShowing();
+        super.hide();
+        if (showing) {
+            Container parent = getParent();
+            if (parent != null) {
+                Rectangle r = getBounds();
+                parent.repaint(r.x, r.y, r.width, r.height);
+            }
+            revalidate();
+        }
     }
 
 }

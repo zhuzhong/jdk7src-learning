@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.beans.PropertyVetoException;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.LinkedHashSet;
 /**
  * A container used to create a multiple-document interface or a virtual desktop.
  * You create <code>JInternalFrame</code> objects and add them to the
@@ -266,7 +267,7 @@ public class JDesktopPane extends JLayeredPane implements Accessible
 
     private static Collection<JInternalFrame> getAllFrames(Container parent) {
         int i, count;
-        Collection<JInternalFrame> results = new ArrayList<JInternalFrame>();
+        Collection<JInternalFrame> results = new LinkedHashSet<>();
         count = parent.getComponentCount();
         for (i = 0; i < count; i++) {
             Component next = parent.getComponent(i);
@@ -425,6 +426,15 @@ public class JDesktopPane extends JLayeredPane implements Accessible
             componentOrderChanged = false;
             updateFramesCache();
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void remove(Component comp) {
+        super.remove(comp);
+        updateFramesCache();
     }
 
     /**

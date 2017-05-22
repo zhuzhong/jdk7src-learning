@@ -1,4 +1,4 @@
-// This file was generated AUTOMATICALLY from a template file Fri Mar 01 03:43:32 PST 2013
+// This file was generated AUTOMATICALLY from a template file Fri Apr 10 11:30:59 PDT 2015
 /*
  * Copyright (c) 2002, 2006, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
@@ -252,7 +252,7 @@ class CharacterDataLatin1 extends CharacterData {
     private CharacterDataLatin1() {};
 
     // The following tables and code generated using:
-  // java GenerateCharacter -template ../../tools/GenerateCharacter/CharacterDataLatin1.java.template -spec ../../tools/UnicodeData/UnicodeData.txt -specialcasing ../../tools/UnicodeData/SpecialCasing.txt -proplist ../../tools/UnicodeData/PropList.txt -o C:/JDK7U2~1/jdk7u17/build/windows-amd64/gensrc/java/lang/CharacterDataLatin1.java -string -usecharforbyte -latin1 8
+  // java GenerateCharacter -template ../../tools/GenerateCharacter/CharacterDataLatin1.java.template -spec ../../tools/UnicodeData/UnicodeData.txt -specialcasing ../../tools/UnicodeData/SpecialCasing.txt -proplist ../../tools/UnicodeData/PropList.txt -o C:/re/jdk7u80/2329/build/windows-amd64/gensrc/java/lang/CharacterDataLatin1.java -string -usecharforbyte -latin1 8
   // The A table has 256 entries for a total of 1024 bytes.
 
   static final int A[] = new int[256];

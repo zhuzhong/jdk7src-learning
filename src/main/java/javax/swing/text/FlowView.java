@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -794,6 +794,30 @@ public abstract class FlowView extends BoxView {
             v.setParent(this);
             super.forwardUpdateToView(v, e, a, f);
             v.setParent(parent);
+        }
+
+        /** {@inheritDoc} */
+        @Override
+        protected void forwardUpdate(DocumentEvent.ElementChange ec,
+                                          DocumentEvent e, Shape a, ViewFactory f) {
+            // Update the view responsible for the changed element by invocation of
+            // super method.
+            super.forwardUpdate(ec, e, a, f);
+            // Re-calculate the update indexes and update the views followed by
+            // the changed place. Note: we update the views only when insertion or
+            // removal takes place.
+            DocumentEvent.EventType type = e.getType();
+            if (type == DocumentEvent.EventType.INSERT ||
+                type == DocumentEvent.EventType.REMOVE) {
+                firstUpdateIndex = Math.min((lastUpdateIndex + 1), (getViewCount() - 1));
+                lastUpdateIndex = Math.max((getViewCount() - 1), 0);
+                for (int i = firstUpdateIndex; i <= lastUpdateIndex; i++) {
+                    View v = getView(i);
+                    if (v != null) {
+                        v.updateAfterChange();
+                    }
+                }
+            }
         }
 
         // The following methods don't do anything useful, they

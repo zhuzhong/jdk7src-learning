@@ -670,7 +670,7 @@ public class TreeMap<K,V>
         return result;
     }
 
-    /**移除并返回与此映射中的最大键关联的键-值映射关系；如果映射为空，则返回 null。
+    /**
      * @since 1.6
      */
     public Map.Entry<K,V> pollLastEntry() {
@@ -798,7 +798,7 @@ public class TreeMap<K,V>
         return navigableKeySet();
     }
 
-    /**返回此映射中所包含键的 NavigableSet 视图
+    /**
      * @since 1.6
      */
     public NavigableSet<K> navigableKeySet() {
@@ -2089,7 +2089,7 @@ public class TreeMap<K,V>
         }
     }
 
-    /** From CLR 对于平衡二叉红黑树，它只有三个动作:左旋，右旋，着色*/
+    /** From CLR */
     private void fixAfterInsertion(Entry<K,V> x) {
         x.color = RED;
 

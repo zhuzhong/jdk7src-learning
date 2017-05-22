@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -48,8 +48,6 @@ import java.io.File;
 import java.io.FileInputStream;
 
 import java.util.*;
-import sun.util.logging.PlatformLogger;
-
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import sun.awt.AppContext;
@@ -58,6 +56,7 @@ import sun.awt.HeadlessToolkit;
 import sun.awt.NullComponentPeer;
 import sun.awt.PeerEvent;
 import sun.awt.SunToolkit;
+import sun.awt.AWTAccessor;
 import sun.security.util.SecurityConstants;
 
 import sun.util.CoreResourceBundleControl;
@@ -1609,6 +1608,12 @@ public abstract class Toolkit {
      * here, so that only one copy is maintained.
      */
     private static ResourceBundle resources;
+    private static ResourceBundle platformResources;
+
+    // called by platform toolkit
+    private static void setPlatformResources(ResourceBundle bundle) {
+        platformResources = bundle;
+    }
 
     /**
      * Initialize JNI field and method ids
@@ -1652,6 +1657,13 @@ public abstract class Toolkit {
     }
 
     static {
+        AWTAccessor.setToolkitAccessor(
+                new AWTAccessor.ToolkitAccessor() {
+                    @Override
+                    public void setPlatformResources(ResourceBundle bundle) {
+                        Toolkit.setPlatformResources(bundle);
+                    }
+                });
         java.security.AccessController.doPrivileged(
                                  new java.security.PrivilegedAction() {
             public Object run() {
@@ -1679,6 +1691,14 @@ public abstract class Toolkit {
      * This method returns defaultValue if the property is not found.
      */
     public static String getProperty(String key, String defaultValue) {
+        // first try platform specific bundle
+        if (platformResources != null) {
+            try {
+                return platformResources.getString(key);
+            } catch (MissingResourceException e) {}
+        }
+
+        // then shared one
         if (resources != null) {
             try {
                 return resources.getString(key);
@@ -1978,7 +1998,7 @@ public abstract class Toolkit {
      */
     public abstract boolean isModalExclusionTypeSupported(Dialog.ModalExclusionType modalExclusionType);
 
-    private static final PlatformLogger log = PlatformLogger.getLogger("java.awt.Toolkit");
+    // 8014736: logging has been removed from Toolkit
 
     private static final int LONG_BITS = 64;
     private int[] calls = new int[LONG_BITS];
@@ -2145,12 +2165,6 @@ public abstract class Toolkit {
         }
 
     synchronized int countAWTEventListeners(long eventMask) {
-        if (log.isLoggable(PlatformLogger.FINE)) {
-            if (eventMask == 0) {
-                log.fine("Assertion (eventMask != 0) failed");
-            }
-        }
-
         int ci = 0;
         for (; eventMask != 0; eventMask >>>= 1, ci++) {
         }
@@ -2552,7 +2566,7 @@ public abstract class Toolkit {
             Runnable updater = new Runnable() {
                 public void run() {
                     PropertyChangeSupport pcs = (PropertyChangeSupport)
-                            AppContext.getAppContext().get(PROP_CHANGE_SUPPORT_KEY);
+                        AppContext.getAppContext().get(PROP_CHANGE_SUPPORT_KEY);
                     if (null != pcs) {
                         pcs.firePropertyChange(evt);
                     }

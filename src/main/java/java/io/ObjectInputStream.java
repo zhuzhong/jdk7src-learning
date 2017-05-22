@@ -41,6 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import static java.io.ObjectStreamClass.processQueue;
+import sun.reflect.misc.ReflectUtil;
 
 /**
  * An ObjectInputStream deserializes primitive data and objects previously
@@ -489,11 +490,12 @@ public class ObjectInputStream
     public void defaultReadObject()
         throws IOException, ClassNotFoundException
     {
-        if (curContext == null) {
+        SerialCallbackContext ctx = curContext;
+        if (ctx == null) {
             throw new NotActiveException("not in call to readObject");
         }
-        Object curObj = curContext.getObj();
-        ObjectStreamClass curDesc = curContext.getDesc();
+        Object curObj = ctx.getObj();
+        ObjectStreamClass curDesc = ctx.getDesc();
         bin.setBlockDataMode(false);
         defaultReadFields(curObj, curDesc);
         bin.setBlockDataMode(true);
@@ -527,11 +529,12 @@ public class ObjectInputStream
     public ObjectInputStream.GetField readFields()
         throws IOException, ClassNotFoundException
     {
-        if (curContext == null) {
+        SerialCallbackContext ctx = curContext;
+        if (ctx == null) {
             throw new NotActiveException("not in call to readObject");
         }
-        Object curObj = curContext.getObj();
-        ObjectStreamClass curDesc = curContext.getDesc();
+        Object curObj = ctx.getObj();
+        ObjectStreamClass curDesc = ctx.getDesc();
         bin.setBlockDataMode(false);
         GetFieldImpl getField = new GetFieldImpl(curDesc);
         getField.readFields();
@@ -1519,6 +1522,12 @@ public class ObjectInputStream
         }
     }
 
+    private boolean isCustomSubclass() {
+        // Return true if this class is a custom subclass of ObjectInputStream
+        return getClass().getClassLoader()
+                    != ObjectInputStream.class.getClassLoader();
+    }
+
     /**
      * Reads in and returns class descriptor for a dynamic proxy class.  Sets
      * passHandle to proxy class descriptor's assigned handle.  If proxy class
@@ -1548,6 +1557,15 @@ public class ObjectInputStream
         try {
             if ((cl = resolveProxyClass(ifaces)) == null) {
                 resolveEx = new ClassNotFoundException("null class");
+            } else if (!Proxy.isProxyClass(cl)) {
+                throw new InvalidClassException("Not a proxy");
+            } else {
+                // ReflectUtil.checkProxyPackageAccess makes a test
+                // equivalent to isCustomSubclass so there's no need
+                // to condition this call to isCustomSubclass == true here.
+                ReflectUtil.checkProxyPackageAccess(
+                        getClass().getClassLoader(),
+                        cl.getInterfaces());
             }
         } catch (ClassNotFoundException ex) {
             resolveEx = ex;
@@ -1589,9 +1607,12 @@ public class ObjectInputStream
         Class cl = null;
         ClassNotFoundException resolveEx = null;
         bin.setBlockDataMode(true);
+        final boolean checksRequired = isCustomSubclass();
         try {
             if ((cl = resolveClass(readDesc)) == null) {
                 resolveEx = new ClassNotFoundException("null class");
+            } else if (checksRequired) {
+                ReflectUtil.checkPackageAccess(cl);
             }
         } catch (ClassNotFoundException ex) {
             resolveEx = ex;
@@ -1946,7 +1967,6 @@ public class ObjectInputStream
     private void defaultReadFields(Object obj, ObjectStreamClass desc)
         throws IOException
     {
-        // REMIND: is isInstance check necessary?
         Class cl = desc.forClass();
         if (cl != null && obj != null && !cl.isInstance(obj)) {
             throw new ClassCastException();
@@ -2031,8 +2051,9 @@ public class ObjectInputStream
      * This method should not be removed or its signature changed without
      * corresponding modifications to the above class.
      */
-    // REMIND: change name to something more accurate?
-    private static native ClassLoader latestUserDefinedLoader();
+    private static ClassLoader latestUserDefinedLoader() {
+        return sun.misc.VM.latestUserDefinedLoader();
+    }
 
     /**
      * Default GetField implementation.

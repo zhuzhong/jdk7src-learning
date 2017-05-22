@@ -2459,23 +2459,18 @@ public final class String
             } else {
                 srcCount = 1;
             }
-            if (localeDependent || srcChar == '\u03A3') { // GREEK CAPITAL LETTER SIGMA
+            if (localeDependent ||
+                srcChar == '\u03A3' || // GREEK CAPITAL LETTER SIGMA
+                srcChar == '\u0130') { // LATIN CAPITAL LETTER I WITH DOT ABOVE
                 lowerChar = ConditionalSpecialCasing.toLowerCaseEx(this, i, locale);
-            } else if (srcChar == '\u0130') { // LATIN CAPITAL LETTER I DOT
-                lowerChar = Character.ERROR;
             } else {
                 lowerChar = Character.toLowerCase(srcChar);
             }
             if ((lowerChar == Character.ERROR)
                     || (lowerChar >= Character.MIN_SUPPLEMENTARY_CODE_POINT)) {
                 if (lowerChar == Character.ERROR) {
-                    if (!localeDependent && srcChar == '\u0130') {
-                        lowerCharArray =
-                                ConditionalSpecialCasing.toLowerCaseCharArray(this, i, Locale.ENGLISH);
-                    } else {
-                        lowerCharArray =
-                                ConditionalSpecialCasing.toLowerCaseCharArray(this, i, locale);
-                    }
+                    lowerCharArray =
+                            ConditionalSpecialCasing.toLowerCaseCharArray(this, i, locale);
                 } else if (srcCount == 2) {
                     resultOffset += Character.toChars(lowerChar, result, i + resultOffset) - srcCount;
                     continue;

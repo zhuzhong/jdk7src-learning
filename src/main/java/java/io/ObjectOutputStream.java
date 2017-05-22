@@ -36,6 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import static java.io.ObjectStreamClass.processQueue;
 import java.io.SerialCallbackContext;
+import sun.reflect.misc.ReflectUtil;
 
 /**
  * An ObjectOutputStream writes primitive data types and graphs of Java objects
@@ -429,11 +430,12 @@ public class ObjectOutputStream
      *          <code>OutputStream</code>
      */
     public void defaultWriteObject() throws IOException {
-        if ( curContext == null ) {
+        SerialCallbackContext ctx = curContext;
+        if (ctx == null) {
             throw new NotActiveException("not in call to writeObject");
         }
-        Object curObj = curContext.getObj();
-        ObjectStreamClass curDesc = curContext.getDesc();
+        Object curObj = ctx.getObj();
+        ObjectStreamClass curDesc = ctx.getDesc();
         bout.setBlockDataMode(false);
         defaultWriteFields(curObj, curDesc);
         bout.setBlockDataMode(true);
@@ -451,11 +453,12 @@ public class ObjectOutputStream
      */
     public ObjectOutputStream.PutField putFields() throws IOException {
         if (curPut == null) {
-            if (curContext == null) {
+            SerialCallbackContext ctx = curContext;
+            if (ctx == null) {
                 throw new NotActiveException("not in call to writeObject");
             }
-            Object curObj = curContext.getObj();
-            ObjectStreamClass curDesc = curContext.getDesc();
+            Object curObj = ctx.getObj();
+            ObjectStreamClass curDesc = ctx.getDesc();
             curPut = new PutFieldImpl(curDesc);
         }
         return curPut;
@@ -1228,6 +1231,12 @@ public class ObjectOutputStream
         }
     }
 
+    private boolean isCustomSubclass() {
+        // Return true if this class is a custom subclass of ObjectOutputStream
+        return getClass().getClassLoader()
+                   != ObjectOutputStream.class.getClassLoader();
+    }
+
     /**
      * Writes class descriptor representing a dynamic proxy class to stream.
      */
@@ -1245,6 +1254,9 @@ public class ObjectOutputStream
         }
 
         bout.setBlockDataMode(true);
+        if (cl != null && isCustomSubclass()) {
+            ReflectUtil.checkPackageAccess(cl);
+        }
         annotateProxyClass(cl);
         bout.setBlockDataMode(false);
         bout.writeByte(TC_ENDBLOCKDATA);
@@ -1271,6 +1283,9 @@ public class ObjectOutputStream
 
         Class cl = desc.forClass();
         bout.setBlockDataMode(true);
+        if (cl != null && isCustomSubclass()) {
+            ReflectUtil.checkPackageAccess(cl);
+        }
         annotateClass(cl);
         bout.setBlockDataMode(false);
         bout.writeByte(TC_ENDBLOCKDATA);
@@ -1503,7 +1518,11 @@ public class ObjectOutputStream
     private void defaultWriteFields(Object obj, ObjectStreamClass desc)
         throws IOException
     {
-        // REMIND: perform conservative isInstance check here?
+        Class<?> cl = desc.forClass();
+        if (cl != null && obj != null && !cl.isInstance(obj)) {
+            throw new ClassCastException();
+        }
+
         desc.checkDefaultSerialize();
 
         int primDataSize = desc.getPrimDataSize();

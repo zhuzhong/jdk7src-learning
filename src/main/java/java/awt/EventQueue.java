@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2014, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -174,9 +174,21 @@ public class EventQueue {
      */
     private volatile int waitForID;
 
+    /*
+     * AppContext corresponding to the queue.
+     */
+    private final AppContext appContext;
+
     private final String name = "AWT-EventQueue-" + threadInitNumber.getAndIncrement();
 
-    private static final PlatformLogger eventLog = PlatformLogger.getLogger("java.awt.event.EventQueue");
+    private static volatile PlatformLogger eventLog;
+
+    private static final PlatformLogger getEventLog() {
+        if(eventLog == null) {
+            eventLog = PlatformLogger.getLogger("java.awt.event.EventQueue");
+        }
+        return eventLog;
+    }
 
     static {
         AWTAccessor.setEventQueueAccessor(
@@ -204,6 +216,11 @@ public class EventQueue {
                 {
                     EventQueue.invokeAndWait(source, r);
                 }
+
+                @Override
+                public long getMostRecentEventTime(EventQueue eventQueue) {
+                    return eventQueue.getMostRecentEventTimeImpl();
+                }
             });
     }
 
@@ -220,8 +237,9 @@ public class EventQueue {
          * completes thus causing mess in thread group to appcontext mapping.
          */
 
-        pushPopLock = (Lock)AppContext.getAppContext().get(AppContext.EVENT_QUEUE_LOCK_KEY);
-        pushPopCond = (Condition)AppContext.getAppContext().get(AppContext.EVENT_QUEUE_COND_KEY);
+        appContext = AppContext.getAppContext();
+        pushPopLock = (Lock)appContext.get(AppContext.EVENT_QUEUE_LOCK_KEY);
+        pushPopCond = (Condition)appContext.get(AppContext.EVENT_QUEUE_COND_KEY);
     }
 
     /**
@@ -235,7 +253,7 @@ public class EventQueue {
      * @throws NullPointerException if <code>theEvent</code> is <code>null</code>
      */
     public void postEvent(AWTEvent theEvent) {
-        SunToolkit.flushPendingEvents();
+        SunToolkit.flushPendingEvents(appContext);
         postEventPrivate(theEvent);
     }
 
@@ -526,7 +544,7 @@ public class EventQueue {
              * of the synchronized block to avoid deadlock when
              * event queues are nested with push()/pop().
              */
-            SunToolkit.flushPendingEvents();
+            SunToolkit.flushPendingEvents(appContext);
             pushPopLock.lock();
             try {
                 AWTEvent event = getNextEventPrivate();
@@ -566,7 +584,7 @@ public class EventQueue {
              * of the synchronized block to avoid deadlock when
              * event queues are nested with push()/pop().
              */
-            SunToolkit.flushPendingEvents();
+            SunToolkit.flushPendingEvents(appContext);
             pushPopLock.lock();
             try {
                 for (int i = 0; i < NUM_PRIORITIES; i++) {
@@ -737,8 +755,8 @@ public class EventQueue {
                 dispatchThread.stopDispatching();
             }
         } else {
-            if (eventLog.isLoggable(PlatformLogger.FINE)) {
-                eventLog.fine("Unable to dispatch event: " + event);
+            if (getEventLog().isLoggable(PlatformLogger.FINE)) {
+                getEventLog().fine("Unable to dispatch event: " + event);
             }
         }
     }
@@ -835,8 +853,8 @@ public class EventQueue {
      * @since           1.2
      */
     public void push(EventQueue newEventQueue) {
-        if (eventLog.isLoggable(PlatformLogger.FINE)) {
-            eventLog.fine("EventQueue.push(" + newEventQueue + ")");
+        if (getEventLog().isLoggable(PlatformLogger.FINE)) {
+            getEventLog().fine("EventQueue.push(" + newEventQueue + ")");
         }
 
         pushPopLock.lock();
@@ -859,8 +877,8 @@ public class EventQueue {
                     // Use getNextEventPrivate() as it doesn't call flushPendingEvents()
                     newEventQueue.postEventPrivate(topQueue.getNextEventPrivate());
                 } catch (InterruptedException ie) {
-                    if (eventLog.isLoggable(PlatformLogger.FINE)) {
-                        eventLog.fine("Interrupted push", ie);
+                    if (getEventLog().isLoggable(PlatformLogger.FINE)) {
+                        getEventLog().fine("Interrupted push", ie);
                     }
                 }
             }
@@ -874,7 +892,6 @@ public class EventQueue {
             newEventQueue.previousQueue = topQueue;
             topQueue.nextQueue = newEventQueue;
 
-            AppContext appContext = AppContext.getAppContext();
             if (appContext.get(AppContext.EVENT_QUEUE_KEY) == topQueue) {
                 appContext.put(AppContext.EVENT_QUEUE_KEY, newEventQueue);
             }
@@ -899,8 +916,8 @@ public class EventQueue {
      * @since           1.2
      */
     protected void pop() throws EmptyStackException {
-        if (eventLog.isLoggable(PlatformLogger.FINE)) {
-            eventLog.fine("EventQueue.pop(" + this + ")");
+        if (getEventLog().isLoggable(PlatformLogger.FINE)) {
+            getEventLog().fine("EventQueue.pop(" + this + ")");
         }
 
         pushPopLock.lock();
@@ -922,8 +939,8 @@ public class EventQueue {
                 try {
                     prevQueue.postEventPrivate(topQueue.getNextEventPrivate());
                 } catch (InterruptedException ie) {
-                    if (eventLog.isLoggable(PlatformLogger.FINE)) {
-                        eventLog.fine("Interrupted pop", ie);
+                    if (getEventLog().isLoggable(PlatformLogger.FINE)) {
+                        getEventLog().fine("Interrupted pop", ie);
                     }
                 }
             }
@@ -935,7 +952,6 @@ public class EventQueue {
                 topQueue.dispatchThread.setEventQueue(prevQueue);
             }
 
-            AppContext appContext = AppContext.getAppContext();
             if (appContext.get(AppContext.EVENT_QUEUE_KEY) == this) {
                 appContext.put(AppContext.EVENT_QUEUE_KEY, prevQueue);
             }
@@ -1028,7 +1044,6 @@ public class EventQueue {
     final void initDispatchThread() {
         pushPopLock.lock();
         try {
-            AppContext appContext = AppContext.getAppContext();
             if (dispatchThread == null && !threadGroup.isDestroyed() && !appContext.isDisposed()) {
                 dispatchThread = AccessController.doPrivileged(
                     new PrivilegedAction<EventDispatchThread>() {
@@ -1040,11 +1055,11 @@ public class EventQueue {
                             t.setContextClassLoader(classLoader);
                             t.setPriority(Thread.NORM_PRIORITY + 1);
                             t.setDaemon(false);
+                            AWTAutoShutdown.getInstance().notifyThreadBusy(t);
                             return t;
                         }
                     }
                 );
-                AWTAutoShutdown.getInstance().notifyThreadBusy(dispatchThread);
                 dispatchThread.start();
             }
         } finally {
@@ -1114,7 +1129,7 @@ public class EventQueue {
      * <code>removeNotify</code> method.
      */
     final void removeSourceEvents(Object source, boolean removeAllEvents) {
-        SunToolkit.flushPendingEvents();
+        SunToolkit.flushPendingEvents(appContext);
         pushPopLock.lock();
         try {
             for (int i = 0; i < NUM_PRIORITIES; i++) {
@@ -1135,6 +1150,10 @@ public class EventQueue {
                         }
                         if (entry.event instanceof SentEvent) {
                             ((SentEvent)entry.event).dispose();
+                        }
+                        if (entry.event instanceof InvocationEvent) {
+                            AWTAccessor.getInvocationEventAccessor()
+                                    .dispose((InvocationEvent)entry.event);
                         }
                         if (prev == null) {
                             queues[i].head = entry.next;

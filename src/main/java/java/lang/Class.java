@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1994, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1994, 2014, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -53,6 +53,7 @@ import java.util.Set;
 import java.util.Map;
 import java.util.HashMap;
 import sun.misc.Unsafe;
+import sun.reflect.CallerSensitive;
 import sun.reflect.ConstantPool;
 import sun.reflect.Reflection;
 import sun.reflect.ReflectionFactory;
@@ -129,11 +130,15 @@ public final
     }
 
     /*
-     * Constructor. Only the Java Virtual Machine creates Class
-     * objects.
+     * Private constructor. Only the Java Virtual Machine creates Class objects.
+     * This constructor is not used and prevents the default constructor being
+     * generated.
      */
-    private Class() {}
-
+    private Class(ClassLoader loader) {
+        // Initialize final field for classLoader.  The initialization value of non-null
+        // prevents future JIT optimizations from assuming this final field is null.
+        classLoader = loader;
+    }
 
     /**
      * Converts the object to a string. The string representation is the
@@ -183,9 +188,11 @@ public final
      *            by this method fails
      * @exception ClassNotFoundException if the class cannot be located
      */
+    @CallerSensitive
     public static Class<?> forName(String className)
                 throws ClassNotFoundException {
-        return forName0(className, true, ClassLoader.getCallerClassLoader());
+        Class<?> caller = Reflection.getCallerClass();
+        return forName0(className, true, ClassLoader.getClassLoader(caller), caller);
     }
 
 
@@ -249,26 +256,32 @@ public final
      * @see       java.lang.ClassLoader
      * @since     1.2
      */
+    @CallerSensitive
     public static Class<?> forName(String name, boolean initialize,
                                    ClassLoader loader)
         throws ClassNotFoundException
     {
-        if (loader == null) {
-            SecurityManager sm = System.getSecurityManager();
-            if (sm != null) {
-                ClassLoader ccl = ClassLoader.getCallerClassLoader();
+        Class<?> caller = null;
+        SecurityManager sm = System.getSecurityManager();
+        if (sm != null) {
+            // Reflective call to get caller class is only needed if a security manager
+            // is present.  Avoid the overhead of making this call otherwise.
+            caller = Reflection.getCallerClass();
+            if (loader == null) {
+                ClassLoader ccl = ClassLoader.getClassLoader(caller);
                 if (ccl != null) {
                     sm.checkPermission(
                         SecurityConstants.GET_CLASSLOADER_PERMISSION);
                 }
             }
         }
-        return forName0(name, initialize, loader);
+        return forName0(name, initialize, loader, caller);
     }
 
-    /** Called after security checks have been made. */
+    /** Called after security check for system loader access checks have been made. */
     private static native Class<?> forName0(String name, boolean initialize,
-                                            ClassLoader loader)
+                                            ClassLoader loader,
+                                            Class<?> caller)
         throws ClassNotFoundException;
 
     /**
@@ -318,18 +331,14 @@ public final
      *             </ul>
      *
      */
+    @CallerSensitive
     public T newInstance()
         throws InstantiationException, IllegalAccessException
     {
         if (System.getSecurityManager() != null) {
-            checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), false);
+            checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), false);
         }
-        return newInstance0();
-    }
 
-    private T newInstance0()
-        throws InstantiationException, IllegalAccessException
-    {
         // NOTE: the following code may not be strictly correct under
         // the current Java memory model.
 
@@ -363,7 +372,7 @@ public final
         // Security check (same as in java.lang.reflect.Constructor)
         int modifiers = tmpConstructor.getModifiers();
         if (!Reflection.quickCheckMemberAccess(this, modifiers)) {
-            Class<?> caller = Reflection.getCallerClass(3);
+            Class<?> caller = Reflection.getCallerClass();
             if (newInstanceCallerCache != caller) {
                 Reflection.ensureMemberAccess(caller, this, null, modifiers);
                 newInstanceCallerCache = caller;
@@ -604,23 +613,25 @@ public final
      * @see SecurityManager#checkPermission
      * @see java.lang.RuntimePermission
      */
+    @CallerSensitive
     public ClassLoader getClassLoader() {
         ClassLoader cl = getClassLoader0();
         if (cl == null)
             return null;
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
-            ClassLoader ccl = ClassLoader.getCallerClassLoader();
-            if (ccl != null && ccl != cl && !cl.isAncestor(ccl)) {
-                sm.checkPermission(SecurityConstants.GET_CLASSLOADER_PERMISSION);
-            }
+            ClassLoader.checkClassLoaderPermission(cl, Reflection.getCallerClass());
         }
         return cl;
     }
 
     // Package-private to allow ClassLoader access
-    native ClassLoader getClassLoader0();
+    ClassLoader getClassLoader0() { return classLoader; }
 
+    // Initialized in JVM not by private constructor
+    // This field is filtered from reflection access, i.e. getDeclaredField
+    // will throw NoSuchFieldException
+    private final ClassLoader classLoader;
 
     /**
      * Returns an array of {@code TypeVariable} objects that represent the
@@ -894,6 +905,7 @@ public final
      *     that class is a local or anonymous class; otherwise {@code null}.
      * @since 1.5
      */
+    @CallerSensitive
     public Method getEnclosingMethod() {
         EnclosingMethodInfo enclosingInfo = getEnclosingMethodInfo();
 
@@ -915,13 +927,22 @@ public final
             for(int i = 0; i < parameterClasses.length; i++)
                 parameterClasses[i] = toClass(parameterTypes[i]);
 
+            // Perform access check
+            Class<?> enclosingCandidate = enclosingInfo.getEnclosingClass();
+            // be very careful not to change the stack depth of this
+            // checkMemberAccess call for security reasons
+            // see java.lang.SecurityManager.checkMemberAccess
+            //
+            // Note that we need to do this on the enclosing class
+            enclosingCandidate.checkMemberAccess(Member.DECLARED,
+                                                 Reflection.getCallerClass(), true);
             /*
              * Loop over all declared methods; match method name,
              * number of and type of parameters, *and* return
              * type.  Matching return type is also necessary
              * because of covariant returns, etc.
              */
-            for(Method m: enclosingInfo.getEnclosingClass().getDeclaredMethods()) {
+            for(Method m: enclosingCandidate.getDeclaredMethods()) {
                 if (m.getName().equals(enclosingInfo.getName()) ) {
                     Class<?>[] candidateParamClasses = m.getParameterTypes();
                     if (candidateParamClasses.length == parameterClasses.length) {
@@ -1022,6 +1043,7 @@ public final
      *     that class is a local or anonymous class; otherwise {@code null}.
      * @since 1.5
      */
+    @CallerSensitive
     public Constructor<?> getEnclosingConstructor() {
         EnclosingMethodInfo enclosingInfo = getEnclosingMethodInfo();
 
@@ -1042,11 +1064,20 @@ public final
             for(int i = 0; i < parameterClasses.length; i++)
                 parameterClasses[i] = toClass(parameterTypes[i]);
 
+            // Perform access check
+            Class<?> enclosingCandidate = enclosingInfo.getEnclosingClass();
+            // be very careful not to change the stack depth of this
+            // checkMemberAccess call for security reasons
+            // see java.lang.SecurityManager.checkMemberAccess
+            //
+            // Note that we need to do this on the enclosing class
+            enclosingCandidate.checkMemberAccess(Member.DECLARED,
+                                                 Reflection.getCallerClass(), true);
             /*
              * Loop over all declared constructors; match number
              * of and type of parameters.
              */
-            for(Constructor<?> c: enclosingInfo.getEnclosingClass().getDeclaredConstructors()) {
+            for(Constructor<?> c: enclosingCandidate.getDeclaredConstructors()) {
                 Class<?>[] candidateParamClasses = c.getParameterTypes();
                 if (candidateParamClasses.length == parameterClasses.length) {
                     boolean matches = true;
@@ -1078,7 +1109,17 @@ public final
      * @return the declaring class for this class
      * @since JDK1.1
      */
-    public native Class<?> getDeclaringClass();
+    @CallerSensitive
+    public Class<?> getDeclaringClass() {
+        final Class<?> candidate = getDeclaringClass0();
+
+        if (candidate != null)
+            candidate.checkPackageAccess(
+                    ClassLoader.getClassLoader(Reflection.getCallerClass()), true);
+        return candidate;
+    }
+
+    private native Class<?> getDeclaringClass0();
 
 
     /**
@@ -1088,6 +1129,7 @@ public final
      * @return the immediately enclosing class of the underlying class
      * @since 1.5
      */
+    @CallerSensitive
     public Class<?> getEnclosingClass() {
         // There are five kinds of classes (or interfaces):
         // a) Top level classes
@@ -1101,18 +1143,24 @@ public final
         // attribute if and only if it is a local class or an
         // anonymous class.
         EnclosingMethodInfo enclosingInfo = getEnclosingMethodInfo();
+        Class<?> enclosingCandidate;
 
         if (enclosingInfo == null) {
             // This is a top level or a nested class or an inner class (a, b, or c)
-            return getDeclaringClass();
+            enclosingCandidate = getDeclaringClass();
         } else {
             Class<?> enclosingClass = enclosingInfo.getEnclosingClass();
             // This is a local class or an anonymous class (d or e)
             if (enclosingClass == this || enclosingClass == null)
                 throw new InternalError("Malformed enclosing method information");
             else
-                return enclosingClass;
+                enclosingCandidate = enclosingClass;
         }
+
+        if (enclosingCandidate != null)
+            enclosingCandidate.checkPackageAccess(
+                    ClassLoader.getClassLoader(Reflection.getCallerClass()), true);
+        return enclosingCandidate;
     }
 
     /**
@@ -1295,11 +1343,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Class<?>[] getClasses() {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), false);
+        checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), false);
 
         // Privileged so this implementation can look at DECLARED classes,
         // something the caller might not have privilege to do.  The code here
@@ -1370,11 +1419,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Field[] getFields() throws SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), true);
         return copyFields(privateGetPublicFields(null));
     }
 
@@ -1421,11 +1471,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Method[] getMethods() throws SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), true);
         return copyMethods(privateGetPublicMethods());
     }
 
@@ -1470,11 +1521,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Constructor<?>[] getConstructors() throws SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), true);
         return copyConstructors(privateGetDeclaredConstructors(true));
     }
 
@@ -1528,12 +1580,13 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Field getField(String name)
         throws NoSuchFieldException, SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), true);
         Field field = getField0(name);
         if (field == null) {
             throw new NoSuchFieldException(name);
@@ -1613,12 +1666,13 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Method getMethod(String name, Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), true);
         Method method = getMethod0(name, parameterTypes);
         if (method == null) {
             throw new NoSuchMethodException(getName() + "." + name + argumentTypesToString(parameterTypes));
@@ -1667,12 +1721,13 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Constructor<T> getConstructor(Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.PUBLIC, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.PUBLIC, Reflection.getCallerClass(), true);
         return getConstructor0(parameterTypes, Member.PUBLIC);
     }
 
@@ -1710,11 +1765,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Class<?>[] getDeclaredClasses() throws SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), false);
+        checkMemberAccess(Member.DECLARED, Reflection.getCallerClass(), false);
         return getDeclaredClasses0();
     }
 
@@ -1754,11 +1810,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Field[] getDeclaredFields() throws SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.DECLARED, Reflection.getCallerClass(), true);
         return copyFields(privateGetDeclaredFields(false));
     }
 
@@ -1802,11 +1859,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Method[] getDeclaredMethods() throws SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.DECLARED, Reflection.getCallerClass(), true);
         return copyMethods(privateGetDeclaredMethods(false));
     }
 
@@ -1847,11 +1905,12 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Constructor<?>[] getDeclaredConstructors() throws SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.DECLARED, Reflection.getCallerClass(), true);
         return copyConstructors(privateGetDeclaredConstructors(false));
     }
 
@@ -1890,12 +1949,13 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Field getDeclaredField(String name)
         throws NoSuchFieldException, SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.DECLARED, Reflection.getCallerClass(), true);
         Field field = searchFields(privateGetDeclaredFields(false), name);
         if (field == null) {
             throw new NoSuchFieldException(name);
@@ -1945,12 +2005,13 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Method getDeclaredMethod(String name, Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.DECLARED, Reflection.getCallerClass(), true);
         Method method = searchMethods(privateGetDeclaredMethods(false), name, parameterTypes);
         if (method == null) {
             throw new NoSuchMethodException(getName() + "." + name + argumentTypesToString(parameterTypes));
@@ -1995,12 +2056,13 @@ public final
      *
      * @since JDK1.1
      */
+    @CallerSensitive
     public Constructor<T> getDeclaredConstructor(Class<?>... parameterTypes)
         throws NoSuchMethodException, SecurityException {
         // be very careful not to change the stack depth of this
         // checkMemberAccess call for security reasons
         // see java.lang.SecurityManager.checkMemberAccess
-        checkMemberAccess(Member.DECLARED, ClassLoader.getCallerClassLoader(), true);
+        checkMemberAccess(Member.DECLARED, Reflection.getCallerClass(), true);
         return getConstructor0(parameterTypes, Member.DECLARED);
     }
 
@@ -2158,30 +2220,100 @@ public final
      */
     static native Class getPrimitiveClass(String name);
 
+    private static class SecurityManagerHelper {
+        final SecurityManager sm;
+        final boolean overrideCheckMemberAccess;
+        SecurityManagerHelper(SecurityManager sm) {
+            this.sm = sm;
+
+            boolean overridden = false;
+            if (sm.getClass() != SecurityManager.class) {
+                try {
+                    overridden = getCheckMemberAccessMethod(sm.getClass()).
+                                     getDeclaringClass() != SecurityManager.class;
+                } catch (NoSuchMethodError e) {
+                    // fall back to invoke sm.checkMemberAccess for the member access check
+                }
+            }
+            this.overrideCheckMemberAccess = overridden;
+        }
+
+    }
+
+    private static volatile SecurityManagerHelper smHelper;
+    private static boolean isCheckMemberAccessOverridden(SecurityManager sm) {
+        if (sm.getClass() == SecurityManager.class)  return false;
+
+        SecurityManagerHelper helper = smHelper;
+        if (helper == null || helper.sm != sm) {
+            helper = new SecurityManagerHelper(sm);
+            smHelper = helper;
+        }
+        return helper.overrideCheckMemberAccess;
+    }
+
+    /**
+     * Finds the checkMemberAccess method of the given SecurityManager class.
+     *
+     * This method calls JNI_GetMethodID to look up the checkMemberAccess method
+     * instead of Class.getMethod0 that may cause loading of classes referenced
+     * by the SecurityManager subclass and cause ClassCircularityError.
+     *
+     * JNI_GetMethodID may throw NoSuchMethodError if the given class
+     * has a static checkMemberAccess method.
+     *
+     * @throws NoSuchMethodError if the method cannot be found.
+     */
+    private static native Method getCheckMemberAccessMethod(Class<? extends SecurityManager> c)
+        throws NoSuchMethodError;
+
 
     /*
      * Check if client is allowed to access members.  If access is denied,
      * throw a SecurityException.
      *
-     * Be very careful not to change the stack depth of this checkMemberAccess
-     * call for security reasons.
-     * See java.lang.SecurityManager.checkMemberAccess.
+     * This method also enforces package access.
      *
      * <p> Default policy: allow all clients access with normal Java access
      * control.
      */
-    private void checkMemberAccess(int which, ClassLoader ccl, boolean checkProxyInterfaces) {
-        SecurityManager s = System.getSecurityManager();
+    private void checkMemberAccess(int which, Class<?> caller, boolean checkProxyInterfaces) {
+        final SecurityManager s = System.getSecurityManager();
         if (s != null) {
-            s.checkMemberAccess(this, which);
-            ClassLoader cl = getClassLoader0();
+            final ClassLoader ccl = ClassLoader.getClassLoader(caller);
+            final ClassLoader cl = getClassLoader0();
+            if (!isCheckMemberAccessOverridden(s)) {
+                // Inlined SecurityManager.checkMemberAccess
+                if (which != Member.PUBLIC) {
+                    if (ccl != cl) {
+                        s.checkPermission(SecurityConstants.CHECK_MEMBER_ACCESS_PERMISSION);
+                    }
+                }
+            } else {
+                // Don't refactor; otherwise break the stack depth for
+                // checkMemberAccess of subclasses of SecurityManager as specified.
+                s.checkMemberAccess(this, which);
+            }
+            this.checkPackageAccess(ccl, checkProxyInterfaces);
+        }
+    }
+
+    /*
+     * Checks if a client loaded in ClassLoader ccl is allowed to access this
+     * class under the current package access policy. If access is denied,
+     * throw a SecurityException.
+     */
+    private void checkPackageAccess(final ClassLoader ccl, boolean checkProxyInterfaces) {
+        final SecurityManager s = System.getSecurityManager();
+        if (s != null) {
+            final ClassLoader cl = getClassLoader0();
             if (ReflectUtil.needsPackageAccessCheck(ccl, cl)) {
                 String name = this.getName();
                 int i = name.lastIndexOf('.');
                 if (i != -1) {
                     // skip the package access check on a proxy class in default proxy package
                     String pkg = name.substring(0, i);
-                    if (!Proxy.isProxyClass(this) || !pkg.equals(ReflectUtil.PROXY_PACKAGE)) {
+                    if (!Proxy.isProxyClass(this) || ReflectUtil.isNonPublicProxyClass(this)) {
                         s.checkPackageAccess(pkg);
                     }
                 }
@@ -2219,44 +2351,110 @@ public final
     }
 
     /**
+     * Atomic operations support.
+     */
+    private static class Atomic {
+        // initialize Unsafe machinery here, since we need to call Class.class instance method
+        // and have to avoid calling it in the static initializer of the Class class...
+        private static final Unsafe unsafe = Unsafe.getUnsafe();
+        // offset of Class.reflectionData instance field
+        private static final long reflectionDataOffset;
+        // offset of Class.annotationType instance field
+        private static final long annotationTypeOffset;
+
+        static {
+            Field[] fields = Class.class.getDeclaredFields0(false); // bypass caches
+            reflectionDataOffset = objectFieldOffset(fields, "reflectionData");
+            annotationTypeOffset = objectFieldOffset(fields, "annotationType");
+        }
+
+        private static long objectFieldOffset(Field[] fields, String fieldName) {
+            Field field = searchFields(fields, fieldName);
+            if (field == null) {
+                throw new Error("No " + fieldName + " field found in java.lang.Class");
+            }
+            return unsafe.objectFieldOffset(field);
+        }
+
+        static <T> boolean casReflectionData(Class<?> clazz,
+                                             SoftReference<ReflectionData<T>> oldData,
+                                             SoftReference<ReflectionData<T>> newData) {
+            return unsafe.compareAndSwapObject(clazz, reflectionDataOffset, oldData, newData);
+        }
+
+        static <T> boolean casAnnotationType(Class<?> clazz,
+                                             AnnotationType oldType,
+                                             AnnotationType newType) {
+            return unsafe.compareAndSwapObject(clazz, annotationTypeOffset, oldType, newType);
+        }
+    }
+
+    /**
      * Reflection support.
      */
 
     // Caches for certain reflective results
     private static boolean useCaches = true;
-    private volatile transient SoftReference<Field[]> declaredFields;
-    private volatile transient SoftReference<Field[]> publicFields;
-    private volatile transient SoftReference<Method[]> declaredMethods;
-    private volatile transient SoftReference<Method[]> publicMethods;
-    private volatile transient SoftReference<Constructor<T>[]> declaredConstructors;
-    private volatile transient SoftReference<Constructor<T>[]> publicConstructors;
-    // Intermediate results for getFields and getMethods
-    private volatile transient SoftReference<Field[]> declaredPublicFields;
-    private volatile transient SoftReference<Method[]> declaredPublicMethods;
+
+    // reflection data that might get invalidated when JVM TI RedefineClasses() is called
+    static class ReflectionData<T> {
+        volatile Field[] declaredFields;
+        volatile Field[] publicFields;
+        volatile Method[] declaredMethods;
+        volatile Method[] publicMethods;
+        volatile Constructor<T>[] declaredConstructors;
+        volatile Constructor<T>[] publicConstructors;
+        // Intermediate results for getFields and getMethods
+        volatile Field[] declaredPublicFields;
+        volatile Method[] declaredPublicMethods;
+        // Value of classRedefinedCount when we created this ReflectionData instance
+        final int redefinedCount;
+
+        ReflectionData(int redefinedCount) {
+            this.redefinedCount = redefinedCount;
+        }
+    }
+
+    private volatile transient SoftReference<ReflectionData<T>> reflectionData;
 
     // Incremented by the VM on each call to JVM TI RedefineClasses()
     // that redefines this class or a superclass.
     private volatile transient int classRedefinedCount = 0;
 
-    // Value of classRedefinedCount when we last cleared the cached values
-    // that are sensitive to class redefinition.
-    private volatile transient int lastRedefinedCount = 0;
+    // Lazily create and cache ReflectionData
+    private ReflectionData<T> reflectionData() {
+        SoftReference<ReflectionData<T>> reflectionData = this.reflectionData;
+        int classRedefinedCount = this.classRedefinedCount;
+        ReflectionData<T> rd;
+        if (useCaches &&
+            reflectionData != null &&
+            (rd = reflectionData.get()) != null &&
+            rd.redefinedCount == classRedefinedCount) {
+            return rd;
+        }
+        // else no SoftReference or cleared SoftReference or stale ReflectionData
+        // -> create and replace new instance
+        return newReflectionData(reflectionData, classRedefinedCount);
+    }
 
-    // Clears cached values that might possibly have been obsoleted by
-    // a class redefinition.
-    private void clearCachesOnClassRedefinition() {
-        if (lastRedefinedCount != classRedefinedCount) {
-            declaredFields = publicFields = declaredPublicFields = null;
-            declaredMethods = publicMethods = declaredPublicMethods = null;
-            declaredConstructors = publicConstructors = null;
-            annotations = declaredAnnotations = null;
+    private ReflectionData<T> newReflectionData(SoftReference<ReflectionData<T>> oldReflectionData,
+                                                int classRedefinedCount) {
+        if (!useCaches) return null;
 
-            // Use of "volatile" (and synchronization by caller in the case
-            // of annotations) ensures that no thread sees the update to
-            // lastRedefinedCount before seeing the caches cleared.
-            // We do not guard against brief windows during which multiple
-            // threads might redundantly work to fill an empty cache.
-            lastRedefinedCount = classRedefinedCount;
+        while (true) {
+            ReflectionData<T> rd = new ReflectionData<>(classRedefinedCount);
+            // try to CAS it...
+            if (Atomic.casReflectionData(this, oldReflectionData, new SoftReference<>(rd))) {
+                return rd;
+            }
+            // else retry
+            oldReflectionData = this.reflectionData;
+            classRedefinedCount = this.classRedefinedCount;
+            if (oldReflectionData != null &&
+                (rd = oldReflectionData.get()) != null &&
+                rd.redefinedCount == classRedefinedCount) {
+                return rd;
+            }
         }
     }
 
@@ -2264,7 +2462,7 @@ public final
     private native String getGenericSignature();
 
     // Generic info repository; lazily initialized
-    private transient ClassRepository genericInfo;
+    private volatile transient ClassRepository genericInfo;
 
     // accessor for factory
     private GenericsFactory getFactory() {
@@ -2274,17 +2472,19 @@ public final
 
     // accessor for generic info repository
     private ClassRepository getGenericInfo() {
+        ClassRepository genericInfo = this.genericInfo;
         // lazily initialize repository if necessary
         if (genericInfo == null) {
             // create and cache generic info repository
             genericInfo = ClassRepository.make(getGenericSignature(),
                                                getFactory());
+            this.genericInfo = genericInfo;
         }
         return genericInfo; //return cached repository
     }
 
     // Annotations handling
-    private native byte[] getRawAnnotations();
+    native byte[] getRawAnnotations();
 
     native ConstantPool getConstantPool();
 
@@ -2299,27 +2499,19 @@ public final
     // via ReflectionFactory.copyField.
     private Field[] privateGetDeclaredFields(boolean publicOnly) {
         checkInitted();
-        Field[] res = null;
-        if (useCaches) {
-            clearCachesOnClassRedefinition();
-            if (publicOnly) {
-                if (declaredPublicFields != null) {
-                    res = declaredPublicFields.get();
-                }
-            } else {
-                if (declaredFields != null) {
-                    res = declaredFields.get();
-                }
-            }
+        Field[] res;
+        ReflectionData<T> rd = reflectionData();
+        if (rd != null) {
+            res = publicOnly ? rd.declaredPublicFields : rd.declaredFields;
             if (res != null) return res;
         }
         // No cached value available; request value from VM
         res = Reflection.filterFields(this, getDeclaredFields0(publicOnly));
-        if (useCaches) {
+        if (rd != null) {
             if (publicOnly) {
-                declaredPublicFields = new SoftReference<>(res);
+                rd.declaredPublicFields = res;
             } else {
-                declaredFields = new SoftReference<>(res);
+                rd.declaredFields = res;
             }
         }
         return res;
@@ -2330,12 +2522,10 @@ public final
     // via ReflectionFactory.copyField.
     private Field[] privateGetPublicFields(Set<Class<?>> traversedInterfaces) {
         checkInitted();
-        Field[] res = null;
-        if (useCaches) {
-            clearCachesOnClassRedefinition();
-            if (publicFields != null) {
-                res = publicFields.get();
-            }
+        Field[] res;
+        ReflectionData<T> rd = reflectionData();
+        if (rd != null) {
+            res = rd.publicFields;
             if (res != null) return res;
         }
 
@@ -2368,8 +2558,8 @@ public final
 
         res = new Field[fields.size()];
         fields.toArray(res);
-        if (useCaches) {
-            publicFields = new SoftReference<>(res);
+        if (rd != null) {
+            rd.publicFields = res;
         }
         return res;
     }
@@ -2392,18 +2582,10 @@ public final
     // instead be copied via ReflectionFactory.copyConstructor.
     private Constructor<T>[] privateGetDeclaredConstructors(boolean publicOnly) {
         checkInitted();
-        Constructor<T>[] res = null;
-        if (useCaches) {
-            clearCachesOnClassRedefinition();
-            if (publicOnly) {
-                if (publicConstructors != null) {
-                    res = publicConstructors.get();
-                }
-            } else {
-                if (declaredConstructors != null) {
-                    res = declaredConstructors.get();
-                }
-            }
+        Constructor<T>[] res;
+        ReflectionData<T> rd = reflectionData();
+        if (rd != null) {
+            res = publicOnly ? rd.publicConstructors : rd.declaredConstructors;
             if (res != null) return res;
         }
         // No cached value available; request value from VM
@@ -2412,11 +2594,11 @@ public final
         } else {
             res = getDeclaredConstructors0(publicOnly);
         }
-        if (useCaches) {
+        if (rd != null) {
             if (publicOnly) {
-                publicConstructors = new SoftReference<>(res);
+                rd.publicConstructors = res;
             } else {
-                declaredConstructors = new SoftReference<>(res);
+                rd.declaredConstructors = res;
             }
         }
         return res;
@@ -2433,27 +2615,19 @@ public final
     // via ReflectionFactory.copyMethod.
     private Method[] privateGetDeclaredMethods(boolean publicOnly) {
         checkInitted();
-        Method[] res = null;
-        if (useCaches) {
-            clearCachesOnClassRedefinition();
-            if (publicOnly) {
-                if (declaredPublicMethods != null) {
-                    res = declaredPublicMethods.get();
-                }
-            } else {
-                if (declaredMethods != null) {
-                    res = declaredMethods.get();
-                }
-            }
+        Method[] res;
+        ReflectionData<T> rd = reflectionData();
+        if (rd != null) {
+            res = publicOnly ? rd.declaredPublicMethods : rd.declaredMethods;
             if (res != null) return res;
         }
         // No cached value available; request value from VM
         res = Reflection.filterMethods(this, getDeclaredMethods0(publicOnly));
-        if (useCaches) {
+        if (rd != null) {
             if (publicOnly) {
-                declaredPublicMethods = new SoftReference<>(res);
+                rd.declaredPublicMethods = res;
             } else {
-                declaredMethods = new SoftReference<>(res);
+                rd.declaredMethods = res;
             }
         }
         return res;
@@ -2555,12 +2729,10 @@ public final
     // via ReflectionFactory.copyMethod.
     private Method[] privateGetPublicMethods() {
         checkInitted();
-        Method[] res = null;
-        if (useCaches) {
-            clearCachesOnClassRedefinition();
-            if (publicMethods != null) {
-                res = publicMethods.get();
-            }
+        Method[] res;
+        ReflectionData<T> rd = reflectionData();
+        if (rd != null) {
+            res = rd.publicMethods;
             if (res != null) return res;
         }
 
@@ -2608,8 +2780,8 @@ public final
         methods.addAllIfNotPresent(inheritedMethods);
         methods.compactAndTrim();
         res = methods.getArray();
-        if (useCaches) {
-            publicMethods = new SoftReference<>(res);
+        if (rd != null) {
+            rd.publicMethods = res;
         }
         return res;
     }
@@ -2619,7 +2791,7 @@ public final
     // Helpers for fetchers of one field, method, or constructor
     //
 
-    private Field searchFields(Field[] fields, String name) {
+    private static Field searchFields(Field[] fields, String name) {
         String internedName = name.intern();
         for (int i = 0; i < fields.length; i++) {
             if (fields[i].getName() == internedName) {
@@ -2637,7 +2809,7 @@ public final
         // of Field objects which have to be created for the common
         // case where the field being requested is declared in the
         // class which is being queried.
-        Field res = null;
+        Field res;
         // Search declared public fields
         if ((res = searchFields(privateGetDeclaredFields(true), name)) != null) {
             return res;
@@ -2689,7 +2861,7 @@ public final
         // number of Method objects which have to be created for the
         // common case where the method being requested is declared in
         // the class which is being queried.
-        Method res = null;
+        Method res;
         // Search declared public methods
         if ((res = searchMethods(privateGetDeclaredMethods(true),
                                  name,
@@ -3090,9 +3262,20 @@ public final
     // Annotations cache
     private transient Map<Class<? extends Annotation>, Annotation> annotations;
     private transient Map<Class<? extends Annotation>, Annotation> declaredAnnotations;
+    // Value of classRedefinedCount when we last cleared the cached annotations and declaredAnnotations fields
+    private  transient int lastAnnotationsRedefinedCount = 0;
+
+    // Clears cached values that might possibly have been obsoleted by
+    // a class redefinition.
+    private void clearAnnotationCachesOnClassRedefinition() {
+        if (lastAnnotationsRedefinedCount != classRedefinedCount) {
+            annotations = declaredAnnotations = null;
+            lastAnnotationsRedefinedCount = classRedefinedCount;
+        }
+    }
 
     private synchronized void initAnnotationsIfNecessary() {
-        clearCachesOnClassRedefinition();
+        clearAnnotationCachesOnClassRedefinition();
         if (annotations != null)
             return;
         declaredAnnotations = AnnotationParser.parseAnnotations(
@@ -3114,10 +3297,11 @@ public final
 
     // Annotation types cache their internal (AnnotationType) form
 
-    private AnnotationType annotationType;
+    @SuppressWarnings("UnusedDeclaration")
+    private volatile transient AnnotationType annotationType;
 
-    void setAnnotationType(AnnotationType type) {
-        annotationType = type;
+    boolean casAnnotationType(AnnotationType oldType, AnnotationType newType) {
+        return Atomic.casAnnotationType(this, oldType, newType);
     }
 
     AnnotationType getAnnotationType() {

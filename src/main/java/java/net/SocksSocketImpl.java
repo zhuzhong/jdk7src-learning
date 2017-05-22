@@ -28,6 +28,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.BufferedOutputStream;
 import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 import sun.net.SocksProxy;
 import sun.net.www.ParseUtil;
@@ -387,14 +388,13 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
             }
             while (iProxy.hasNext()) {
                 p = iProxy.next();
-                if (p == null || p == Proxy.NO_PROXY) {
+                if (p == null || p.type() != Proxy.Type.SOCKS) {
                     super.connect(epoint, remainingMillis(deadlineMillis));
                     return;
                 }
-                if (p.type() != Proxy.Type.SOCKS)
-                    throw new SocketException("Unknown proxy type : " + p.type());
+
                 if (!(p.address() instanceof InetSocketAddress))
-                    throw new SocketException("Unknow address type for proxy: " + p);
+                    throw new SocketException("Unknown address type for proxy: " + p);
                 // Use getHostString() to avoid reverse lookups
                 server = ((InetSocketAddress) p.address()).getHostString();
                 serverPort = ((InetSocketAddress) p.address()).getPort();
@@ -590,7 +590,13 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
         /* Test for AnyLocal */
         InetAddress naddr = baddr;
         if (naddr.isAnyLocalAddress()) {
-            naddr = cmdsock.getLocalAddress();
+            naddr = AccessController.doPrivileged(
+                        new PrivilegedAction<InetAddress>() {
+                            public InetAddress run() {
+                                return cmdsock.getLocalAddress();
+
+                            }
+                        });
             addr1 = naddr.getAddress();
         }
         out.write(PROTO_VERS4);
@@ -696,13 +702,12 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
             }
             while (iProxy.hasNext()) {
                 p = iProxy.next();
-                if (p == null || p == Proxy.NO_PROXY) {
+                if (p == null || p.type() != Proxy.Type.SOCKS) {
                     return;
                 }
-                if (p.type() != Proxy.Type.SOCKS)
-                    throw new SocketException("Unknown proxy type : " + p.type());
+
                 if (!(p.address() instanceof InetSocketAddress))
-                    throw new SocketException("Unknow address type for proxy: " + p);
+                    throw new SocketException("Unknown address type for proxy: " + p);
                 // Use getHostString() to avoid reverse lookups
                 server = ((InetSocketAddress) p.address()).getHostString();
                 serverPort = ((InetSocketAddress) p.address()).getPort();

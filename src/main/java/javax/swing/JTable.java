@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -52,6 +52,7 @@ import java.text.MessageFormat;
 
 import javax.print.attribute.*;
 import javax.print.PrintService;
+import sun.reflect.misc.ReflectUtil;
 
 import sun.swing.SwingUtilities2;
 import sun.swing.SwingUtilities2.Section;
@@ -3947,7 +3948,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
                     break;
                 case TableModelEvent.INSERT:
                     modelSelection.insertIndexInterval(change.startModelIndex,
-                                                       change.endModelIndex,
+                                                       change.length,
                                                        true);
                     break;
                 default:
@@ -4040,7 +4041,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
                 }
                 // Restore the lead
                 int viewLeadIndex = modelSelection.getLeadSelectionIndex();
-                if (viewLeadIndex != -1) {
+                if (viewLeadIndex != -1 && !modelSelection.isSelectionEmpty()) {
                     viewLeadIndex = convertRowIndexToView(viewLeadIndex);
                 }
                 SwingUtilities2.setLeadAnchorWithoutSelection(
@@ -5460,14 +5461,16 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
             // they have the option to replace the value with
             // null or use escape to restore the original.
             // For Strings, return "" for backward compatibility.
-            if ("".equals(s)) {
-                if (constructor.getDeclaringClass() == String.class) {
-                    value = s;
-                }
-                super.stopCellEditing();
-            }
 
             try {
+                if ("".equals(s)) {
+                    if (constructor.getDeclaringClass() == String.class) {
+                        value = s;
+                    }
+                    return super.stopCellEditing();
+                }
+
+                SwingUtilities2.checkAccess(constructor.getModifiers());
                 value = constructor.newInstance(new Object[]{s});
             }
             catch (Exception e) {
@@ -5491,6 +5494,8 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
                 if (type == Object.class) {
                     type = String.class;
                 }
+                ReflectUtil.checkPackageAccess(type);
+                SwingUtilities2.checkAccess(type.getModifiers());
                 constructor = type.getConstructor(argTypes);
             }
             catch (Exception e) {
@@ -6582,8 +6587,8 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
     TableColumnModelListener, CellEditorListener, PropertyChangeListener,
     AccessibleExtendedTable {
 
-        int lastSelectedRow;
-        int lastSelectedCol;
+        int previousFocusedRow;
+        int previousFocusedCol;
 
         /**
          * AccessibleJTable constructor
@@ -6598,8 +6603,10 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
             tcm.addColumnModelListener(this);
             tcm.getSelectionModel().addListSelectionListener(this);
             JTable.this.getModel().addTableModelListener(this);
-            lastSelectedRow = JTable.this.getSelectedRow();
-            lastSelectedCol = JTable.this.getSelectedColumn();
+            previousFocusedRow = JTable.this.getSelectionModel().
+                                        getLeadSelectionIndex();
+            previousFocusedCol = JTable.this.getColumnModel().
+                                        getSelectionModel().getLeadSelectionIndex();
         }
 
     // Listeners to track model, etc. changes to as to re-place the other
@@ -6927,18 +6934,21 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
             firePropertyChange(AccessibleContext.ACCESSIBLE_SELECTION_PROPERTY,
                                Boolean.valueOf(false), Boolean.valueOf(true));
 
-            int selectedRow = JTable.this.getSelectedRow();
-            int selectedCol = JTable.this.getSelectedColumn();
-            if (selectedRow != lastSelectedRow ||
-                selectedCol != lastSelectedCol) {
-                Accessible oldA = getAccessibleAt(lastSelectedRow,
-                                                  lastSelectedCol);
-                Accessible newA = getAccessibleAt(selectedRow, selectedCol);
+            // Using lead selection index to cover both cases: node selected and node
+            // is focused but not selected (Ctrl+up/down)
+            int focusedRow = JTable.this.getSelectionModel().getLeadSelectionIndex();
+            int focusedCol = JTable.this.getColumnModel().getSelectionModel().
+                                                    getLeadSelectionIndex();
+
+            if (focusedRow != previousFocusedRow ||
+                focusedCol != previousFocusedCol){
+                Accessible oldA = getAccessibleAt(previousFocusedRow, previousFocusedCol);
+                Accessible newA = getAccessibleAt(focusedRow, focusedCol);
                 firePropertyChange(AccessibleContext.ACCESSIBLE_ACTIVE_DESCENDANT_PROPERTY,
-                                   oldA, newA);
-                 lastSelectedRow = selectedRow;
-                 lastSelectedCol = selectedCol;
-             }
+                                    oldA, newA);
+                previousFocusedRow = focusedRow;
+                previousFocusedCol = focusedCol;
+            }
         }
 
 
@@ -8584,7 +8594,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
              *    <code>null</code> if this object is not on the screen
              */
             public Point getLocationOnScreen() {
-                if (parent != null) {
+                if (parent != null && parent.isShowing()) {
                     Point parentLocation = parent.getLocationOnScreen();
                     Point componentLocation = getLocation();
                     componentLocation.translate(parentLocation.x, parentLocation.y);
@@ -9385,7 +9395,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
              *    <code>null</code> if this object is not on the screen
              */
             public Point getLocationOnScreen() {
-                if (parent != null) {
+                if (parent != null && parent.isShowing()) {
                     Point parentLocation = parent.getLocationOnScreen();
                     Point componentLocation = getLocation();
                     componentLocation.translate(parentLocation.x, parentLocation.y);

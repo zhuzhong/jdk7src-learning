@@ -29,7 +29,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.FileOutputStream;
+import java.security.AccessControlException;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
@@ -1012,10 +1012,17 @@ public final class ProcessBuilder
         String prog = cmdarray[0];
 
         SecurityManager security = System.getSecurityManager();
-        if (security != null)
+        if (security != null) {
             security.checkExec(prog);
+        }
 
         String dir = directory == null ? null : directory.toString();
+
+        for (int i = 1; i < cmdarray.length; i++) {
+            if (cmdarray[i].indexOf('\u0000') >= 0) {
+                throw new IOException("invalid null character in command");
+            }
+        }
 
         try {
             return ProcessImpl.start(cmdarray,
@@ -1023,14 +1030,25 @@ public final class ProcessBuilder
                                      dir,
                                      redirects,
                                      redirectErrorStream);
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
+            String exceptionInfo = ": " + e.getMessage();
+            Throwable cause = e;
+            if ((e instanceof IOException) && security != null) {
+                // Can not disclose the fail reason for read-protected files.
+                try {
+                    security.checkRead(prog);
+                } catch (AccessControlException ace) {
+                    exceptionInfo = "";
+                    cause = ace;
+                }
+            }
             // It's much easier for us to create a high-quality error
             // message than the low-level C code which found the problem.
             throw new IOException(
                 "Cannot run program \"" + prog + "\""
                 + (dir == null ? "" : " (in directory \"" + dir + "\")")
-                + ": " + e.getMessage(),
-                e);
+                + exceptionInfo,
+                cause);
         }
     }
 }

@@ -461,16 +461,16 @@ public class MetalFileChooserUI extends BasicFileChooserUI {
 
         Locale l = fc.getLocale();
 
-        lookInLabelMnemonic = UIManager.getInt("FileChooser.lookInLabelMnemonic");
+        lookInLabelMnemonic = getMnemonic("FileChooser.lookInLabelMnemonic", l);
         lookInLabelText = UIManager.getString("FileChooser.lookInLabelText",l);
         saveInLabelText = UIManager.getString("FileChooser.saveInLabelText",l);
 
-        fileNameLabelMnemonic = UIManager.getInt("FileChooser.fileNameLabelMnemonic");
+        fileNameLabelMnemonic = getMnemonic("FileChooser.fileNameLabelMnemonic", l);
         fileNameLabelText = UIManager.getString("FileChooser.fileNameLabelText",l);
-        folderNameLabelMnemonic = UIManager.getInt("FileChooser.folderNameLabelMnemonic");
+        folderNameLabelMnemonic = getMnemonic("FileChooser.folderNameLabelMnemonic", l);
         folderNameLabelText = UIManager.getString("FileChooser.folderNameLabelText",l);
 
-        filesOfTypeLabelMnemonic = UIManager.getInt("FileChooser.filesOfTypeLabelMnemonic");
+        filesOfTypeLabelMnemonic = getMnemonic("FileChooser.filesOfTypeLabelMnemonic", l);
         filesOfTypeLabelText = UIManager.getString("FileChooser.filesOfTypeLabelText",l);
 
         upFolderToolTipText =  UIManager.getString("FileChooser.upFolderToolTipText",l);
@@ -487,6 +487,10 @@ public class MetalFileChooserUI extends BasicFileChooserUI {
 
         detailsViewButtonToolTipText = UIManager.getString("FileChooser.detailsViewButtonToolTipText",l);
         detailsViewButtonAccessibleName = UIManager.getString("FileChooser.detailsViewButtonAccessibleName",l);
+    }
+
+    private Integer getMnemonic(String key, Locale l) {
+        return SwingUtilities2.getUIDefaultsInt(key, l);
     }
 
     protected void installListeners(JFileChooser fc) {
@@ -937,16 +941,9 @@ public class MetalFileChooserUI extends BasicFileChooserUI {
 
             directories.clear();
 
-            File[] baseFolders;
-            if (useShellFolder) {
-                baseFolders = AccessController.doPrivileged(new PrivilegedAction<File[]>() {
-                    public File[] run() {
-                        return (File[]) ShellFolder.get("fileChooserComboBoxFolders");
-                    }
-                });
-            } else {
-                baseFolders = fsv.getRoots();
-            }
+            File[] baseFolders = (useShellFolder)
+                    ? (File[]) ShellFolder.get("fileChooserComboBoxFolders")
+                    : fsv.getRoots();
             directories.addAll(Arrays.asList(baseFolders));
 
             // Get the canonical (full) path. This has the side

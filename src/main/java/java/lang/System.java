@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1994, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1994, 2014, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -25,6 +25,7 @@
 package java.lang;
 
 import java.io.*;
+import java.security.AccessControlContext;
 import java.util.Properties;
 import java.util.PropertyPermission;
 import java.util.StringTokenizer;
@@ -34,6 +35,7 @@ import java.security.AllPermission;
 import java.nio.channels.Channel;
 import java.nio.channels.spi.SelectorProvider;
 import sun.nio.ch.Interruptible;
+import sun.reflect.CallerSensitive;
 import sun.reflect.Reflection;
 import sun.security.util.SecurityConstants;
 import sun.reflect.annotation.AnnotationType;
@@ -1055,8 +1057,9 @@ public final class System {
      * @see        java.lang.Runtime#load(java.lang.String)
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
+    @CallerSensitive
     public static void load(String filename) {
-        Runtime.getRuntime().load0(getCallerClass(), filename);
+        Runtime.getRuntime().load0(Reflection.getCallerClass(), filename);
     }
 
     /**
@@ -1080,8 +1083,9 @@ public final class System {
      * @see        java.lang.Runtime#loadLibrary(java.lang.String)
      * @see        java.lang.SecurityManager#checkLink(java.lang.String)
      */
+    @CallerSensitive
     public static void loadLibrary(String libname) {
-        Runtime.getRuntime().loadLibrary0(getCallerClass(), libname);
+        Runtime.getRuntime().loadLibrary0(Reflection.getCallerClass(), libname);
     }
 
     /**
@@ -1174,11 +1178,14 @@ public final class System {
             public sun.reflect.ConstantPool getConstantPool(Class klass) {
                 return klass.getConstantPool();
             }
-            public void setAnnotationType(Class klass, AnnotationType type) {
-                klass.setAnnotationType(type);
+            public boolean casAnnotationType(Class<?> klass, AnnotationType oldType, AnnotationType newType) {
+                return klass.casAnnotationType(oldType, newType);
             }
             public AnnotationType getAnnotationType(Class klass) {
                 return klass.getAnnotationType();
+            }
+            public byte[] getRawClassAnnotations(Class<?> klass) {
+                return klass.getRawAnnotations();
             }
             public <E extends Enum<E>>
                     E[] getEnumConstantsShared(Class<E> klass) {
@@ -1199,12 +1206,12 @@ public final class System {
             public int getStringHash32(String string) {
                 return string.hash32();
             }
+            public Thread newThreadWithAcc(Runnable target, AccessControlContext acc) {
+                return new Thread(target, acc);
+            }
+            public void invokeFinalize(Object o) throws Throwable {
+                o.finalize();
+            }
         });
-    }
-
-    /* returns the class of the caller. */
-    static Class<?> getCallerClass() {
-        // NOTE use of more generic Reflection.getCallerClass()
-        return Reflection.getCallerClass(3);
     }
 }
