@@ -25,10 +25,9 @@
 
 package java.util.prefs;
 
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.StringTokenizer;
 import java.io.ByteArrayOutputStream;
+import java.util.StringTokenizer;
+
 import sun.util.logging.PlatformLogger;
 
 /**

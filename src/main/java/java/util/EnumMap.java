@@ -25,7 +25,6 @@
 
 package java.util;
 
-import java.util.Map.Entry;
 import sun.misc.SharedSecrets;
 
 /**
