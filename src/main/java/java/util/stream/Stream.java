@@ -642,7 +642,7 @@ public interface Stream<T> extends BaseStream<T, Stream<T>> {
      * @throws NullPointerException if the result of the reduction is null
      * @see #reduce(Object, BinaryOperator)
      * @see #min(Comparator)
-     * @see #max(Comparator)
+     * @see #max(Comparator)  它的作用是集合中元素的二次聚合，而非
      */
     Optional<T> reduce(BinaryOperator<T> accumulator);
 
