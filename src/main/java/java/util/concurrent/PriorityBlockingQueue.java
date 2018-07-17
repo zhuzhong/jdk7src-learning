@@ -37,7 +37,17 @@ package java.util.concurrent;
 
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.*;
+import java.util.AbstractQueue;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.PriorityQueue;
+import java.util.Queue;
+import java.util.SortedSet;
+import java.util.Spliterator;
+import java.util.function.Consumer;
 
 /**
  * An unbounded {@linkplain BlockingQueue blocking queue} that uses
@@ -95,6 +105,7 @@ import java.util.*;
  * @author Doug Lea
  * @param <E> the type of elements held in this collection
  */
+@SuppressWarnings("unchecked")
 public class PriorityBlockingQueue<E> extends AbstractQueue<E>
     implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = 5595510919245408276L;
@@ -169,7 +180,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * to maintain compatibility with previous versions
      * of this class. Non-null only during serialization/deserialization.
      */
-    private PriorityQueue q;
+    private PriorityQueue<E> q;
 
     /**
      * Creates a {@code PriorityBlockingQueue} with the default
@@ -218,7 +229,7 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
     /**
      * Creates a {@code PriorityBlockingQueue} containing the elements
      * in the specified collection.  If the specified collection is a
-     * {@link SortedSet} or a {@link PriorityQueue},  this
+     * {@link SortedSet} or a {@link PriorityQueue}, this
      * priority queue will be ordered according to the same ordering.
      * Otherwise, this priority queue will be ordered according to the
      * {@linkplain Comparable natural ordering} of its elements.
@@ -341,7 +352,6 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * @param k the position to fill
      * @param x the item to insert
      * @param array the heap array
-     * @param n heap size
      */
     private static <T> void siftUpComparable(int k, T x, Object[] array) {
         Comparable<? super T> key = (Comparable<? super T>) x;
@@ -854,12 +864,8 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * Returns an iterator over the elements in this queue. The
      * iterator does not return the elements in any particular order.
      *
-     * <p>The returned iterator is a "weakly consistent" iterator that
-     * will never throw {@link java.util.ConcurrentModificationException
-     * ConcurrentModificationException}, and guarantees to traverse
-     * elements as they existed upon construction of the iterator, and
-     * may (but is not guaranteed to) reflect any modifications
-     * subsequent to construction.
+     * <p>The returned iterator is
+     * <a href="package-summary.html#Weakly"><i>weakly consistent</i></a>.
      *
      * @return an iterator over the elements in this queue
      */
@@ -905,6 +911,9 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
      * For compatibility with previous version of this class, elements
      * are first copied to a java.util.PriorityQueue, which is then
      * serialized.
+     *
+     * @param s the stream
+     * @throws java.io.IOException if an I/O error occurs
      */
     private void writeObject(java.io.ObjectOutputStream s)
         throws java.io.IOException {
@@ -922,6 +931,10 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
 
     /**
      * Reconstitutes this queue from a stream (that is, deserializes it).
+     * @param s the stream
+     * @throws ClassNotFoundException if the class of a serialized object
+     *         could not be found
+     * @throws java.io.IOException if an I/O error occurs
      */
     private void readObject(java.io.ObjectInputStream s)
         throws java.io.IOException, ClassNotFoundException {
@@ -935,13 +948,92 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         }
     }
 
+    // Similar to Collections.ArraySnapshotSpliterator but avoids
+    // commitment to toArray until needed
+    static final class PBQSpliterator<E> implements Spliterator<E> {
+        final PriorityBlockingQueue<E> queue;
+        Object[] array;
+        int index;
+        int fence;
+
+        PBQSpliterator(PriorityBlockingQueue<E> queue, Object[] array,
+                       int index, int fence) {
+            this.queue = queue;
+            this.array = array;
+            this.index = index;
+            this.fence = fence;
+        }
+
+        final int getFence() {
+            int hi;
+            if ((hi = fence) < 0)
+                hi = fence = (array = queue.toArray()).length;
+            return hi;
+        }
+
+        public Spliterator<E> trySplit() {
+            int hi = getFence(), lo = index, mid = (lo + hi) >>> 1;
+            return (lo >= mid) ? null :
+                new PBQSpliterator<E>(queue, array, lo, index = mid);
+        }
+
+        @SuppressWarnings("unchecked")
+        public void forEachRemaining(Consumer<? super E> action) {
+            Object[] a; int i, hi; // hoist accesses and checks from loop
+            if (action == null)
+                throw new NullPointerException();
+            if ((a = array) == null)
+                fence = (a = queue.toArray()).length;
+            if ((hi = fence) <= a.length &&
+                (i = index) >= 0 && i < (index = hi)) {
+                do { action.accept((E)a[i]); } while (++i < hi);
+            }
+        }
+
+        public boolean tryAdvance(Consumer<? super E> action) {
+            if (action == null)
+                throw new NullPointerException();
+            if (getFence() > index && index >= 0) {
+                @SuppressWarnings("unchecked") E e = (E) array[index++];
+                action.accept(e);
+                return true;
+            }
+            return false;
+        }
+
+        public long estimateSize() { return (long)(getFence() - index); }
+
+        public int characteristics() {
+            return Spliterator.NONNULL | Spliterator.SIZED | Spliterator.SUBSIZED;
+        }
+    }
+
+    /**
+     * Returns a {@link Spliterator} over the elements in this queue.
+     *
+     * <p>The returned spliterator is
+     * <a href="package-summary.html#Weakly"><i>weakly consistent</i></a>.
+     *
+     * <p>The {@code Spliterator} reports {@link Spliterator#SIZED} and
+     * {@link Spliterator#NONNULL}.
+     *
+     * @implNote
+     * The {@code Spliterator} additionally reports {@link Spliterator#SUBSIZED}.
+     *
+     * @return a {@code Spliterator} over the elements in this queue
+     * @since 1.8
+     */
+    public Spliterator<E> spliterator() {
+        return new PBQSpliterator<E>(this, null, 0, -1);
+    }
+
     // Unsafe mechanics
     private static final sun.misc.Unsafe UNSAFE;
     private static final long allocationSpinLockOffset;
     static {
         try {
             UNSAFE = sun.misc.Unsafe.getUnsafe();
-            Class k = PriorityBlockingQueue.class;
+            Class<?> k = PriorityBlockingQueue.class;
             allocationSpinLockOffset = UNSAFE.objectFieldOffset
                 (k.getDeclaredField("allocationSpinLock"));
         } catch (Exception e) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -34,7 +34,7 @@ import sun.swing.SwingUtilities2;
  * <code>NumberFormatter</code> subclasses <code>InternationalFormatter</code>
  * adding special behavior for numbers. Among the specializations are
  * (these are only used if the <code>NumberFormatter</code> does not display
- * invalid nubers, eg <code>setAllowsInvalid(false)</code>):
+ * invalid numbers, for example, <code>setAllowsInvalid(false)</code>):
  * <ul>
  *   <li>Pressing +/- (- is determined from the
  *       <code>DecimalFormatSymbols</code> associated with the
@@ -44,7 +44,7 @@ import sun.swing.SwingUtilities2;
  *   <li>Pressing +/- (- is determined from the
  *       <code>DecimalFormatSymbols</code> associated with the
  *       <code>DecimalFormat</code>) in the exponent field will
- *       attemp to change the sign of the exponent to positive/negative.
+ *       attempt to change the sign of the exponent to positive/negative.
  * </ul>
  * <p>
  * If you are displaying scientific numbers, you may wish to turn on
@@ -85,7 +85,7 @@ import sun.swing.SwingUtilities2;
  * future Swing releases. The current serialization support is
  * appropriate for short term storage or RMI between applications running
  * the same version of Swing.  As of 1.4, support for long term storage
- * of all JavaBeans<sup><font size="-2">TM</font></sup>
+ * of all JavaBeans&trade;
  * has been added to the <code>java.beans</code> package.
  * Please see {@link java.beans.XMLEncoder}.
  *
@@ -299,9 +299,9 @@ public class NumberFormatter extends InternationalFormatter {
     }
 
     /**
-     * Subclassed to make the decimal separator navigatable, as well
+     * Subclassed to make the decimal separator navigable, as well
      * as making the character between the integer field and the next
-     * field navigatable.
+     * field navigable.
      */
     boolean isNavigatable(int index) {
         if (!super.isNavigatable(index)) {

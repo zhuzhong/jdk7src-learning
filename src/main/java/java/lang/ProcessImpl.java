@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -38,6 +38,7 @@ import java.lang.ProcessBuilder.Redirect;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -429,7 +430,7 @@ final class ProcessImpl extends Process {
         return stderr_stream;
     }
 
-    public void finalize() {
+    protected void finalize() {
         closeHandle(handle);
     }
 
@@ -450,10 +451,53 @@ final class ProcessImpl extends Process {
             throw new InterruptedException();
         return exitValue();
     }
+
     private static native void waitForInterruptibly(long handle);
 
+    @Override
+    public boolean waitFor(long timeout, TimeUnit unit)
+        throws InterruptedException
+    {
+        if (getExitCodeProcess(handle) != STILL_ACTIVE) return true;
+        if (timeout <= 0) return false;
+
+        long remainingNanos  = unit.toNanos(timeout);
+        long deadline = System.nanoTime() + remainingNanos ;
+
+        do {
+            // Round up to next millisecond
+            long msTimeout = TimeUnit.NANOSECONDS.toMillis(remainingNanos + 999_999L);
+            waitForTimeoutInterruptibly(handle, msTimeout);
+            if (Thread.interrupted())
+                throw new InterruptedException();
+            if (getExitCodeProcess(handle) != STILL_ACTIVE) {
+                return true;
+            }
+            remainingNanos = deadline - System.nanoTime();
+        } while (remainingNanos > 0);
+
+        return (getExitCodeProcess(handle) != STILL_ACTIVE);
+    }
+
+    private static native void waitForTimeoutInterruptibly(
+        long handle, long timeout);
+
     public void destroy() { terminateProcess(handle); }
+
+    @Override
+    public Process destroyForcibly() {
+        destroy();
+        return this;
+    }
+
     private static native void terminateProcess(long handle);
+
+    @Override
+    public boolean isAlive() {
+        return isProcessAlive(handle);
+    }
+
+    private static native boolean isProcessAlive(long handle);
 
     /**
      * Create a process using the win32 function CreateProcess.

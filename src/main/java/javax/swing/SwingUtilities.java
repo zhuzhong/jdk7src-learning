@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -793,7 +793,8 @@ public class SwingUtilities implements SwingConstants
      * @return true if the left mouse button was active
      */
     public static boolean isLeftMouseButton(MouseEvent anEvent) {
-         return ((anEvent.getModifiers() & InputEvent.BUTTON1_MASK) != 0);
+         return ((anEvent.getModifiersEx() & InputEvent.BUTTON1_DOWN_MASK) != 0 ||
+                 anEvent.getButton() == MouseEvent.BUTTON1);
     }
 
     /**
@@ -803,7 +804,8 @@ public class SwingUtilities implements SwingConstants
      * @return true if the middle mouse button was active
      */
     public static boolean isMiddleMouseButton(MouseEvent anEvent) {
-        return ((anEvent.getModifiers() & InputEvent.BUTTON2_MASK) == InputEvent.BUTTON2_MASK);
+        return ((anEvent.getModifiersEx() & InputEvent.BUTTON2_DOWN_MASK) != 0 ||
+                anEvent.getButton() == MouseEvent.BUTTON2);
     }
 
     /**
@@ -813,7 +815,8 @@ public class SwingUtilities implements SwingConstants
      * @return true if the right mouse button was active
      */
     public static boolean isRightMouseButton(MouseEvent anEvent) {
-        return ((anEvent.getModifiers() & InputEvent.BUTTON3_MASK) == InputEvent.BUTTON3_MASK);
+        return ((anEvent.getModifiersEx() & InputEvent.BUTTON3_DOWN_MASK) != 0 ||
+                anEvent.getButton() == MouseEvent.BUTTON3);
     }
 
     /**
@@ -1275,8 +1278,7 @@ public class SwingUtilities implements SwingConstants
      * <p>
      * Additional documentation and examples for this method can be
      * found in
-     * <A HREF="http://java.sun.com/docs/books/tutorial/uiswing/misc/threads.html">How to Use Threads</a>,
-     * in <em>The Java Tutorial</em>.
+     * <A HREF="https://docs.oracle.com/javase/tutorial/uiswing/concurrency/index.html">Concurrency in Swing</a>.
      * <p>
      * As of 1.3 this method is just a cover for <code>java.awt.EventQueue.invokeLater()</code>.
      * <p>
@@ -1327,14 +1329,13 @@ public class SwingUtilities implements SwingConstants
      * <p>
      * Additional documentation and examples for this method can be
      * found in
-     * <A HREF="http://java.sun.com/docs/books/tutorial/uiswing/misc/threads.html">How to Use Threads</a>,
-     * in <em>The Java Tutorial</em>.
+     * <A HREF="https://docs.oracle.com/javase/tutorial/uiswing/concurrency/index.html">Concurrency in Swing</a>.
      * <p>
      * As of 1.3 this method is just a cover for
      * <code>java.awt.EventQueue.invokeAndWait()</code>.
      *
      * @exception  InterruptedException if we're interrupted while waiting for
-     *             the event dispatching thread to finish excecuting
+     *             the event dispatching thread to finish executing
      *             <code>doRun.run()</code>
      * @exception  InvocationTargetException  if an exception is thrown
      *             while running <code>doRun</code>

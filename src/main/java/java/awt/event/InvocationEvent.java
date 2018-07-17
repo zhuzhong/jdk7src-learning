@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -64,11 +64,6 @@ public class InvocationEvent extends AWTEvent implements ActiveEvent {
             public void dispose(InvocationEvent invocationEvent) {
                 invocationEvent.finishedDispatching(false);
             }
-            @Override
-            public InvocationEvent createEvent(Object source, Runnable runnable, Runnable listener,
-                                               boolean catchThrowables) {
-                return new InvocationEvent(source, runnable, listener, catchThrowables);
-            }
         });
     }
 
@@ -94,17 +89,19 @@ public class InvocationEvent extends AWTEvent implements ActiveEvent {
 
     /**
      * The (potentially null) Object whose notifyAll() method will be called
-     * immediately after the Runnable.run() method has returned or thrown an exception.
+     * immediately after the Runnable.run() method has returned or thrown an exception
+     * or after the event was disposed.
      *
      * @see #isDispatched
      */
-    protected Object notifier;
+    protected volatile Object notifier;
 
     /**
      * The (potentially null) Runnable whose run() method will be called
      * immediately after the event was dispatched or disposed.
      *
      * @see #isDispatched
+     * @since 1.8
      */
     private final Runnable listener;
 
@@ -195,7 +192,8 @@ public class InvocationEvent extends AWTEvent implements ActiveEvent {
      * @param notifier          The {@code Object} whose <code>notifyAll</code>
      *                          method will be called after
      *                          <code>Runnable.run</code> has returned or
-     *                          thrown an exception
+     *                          thrown an exception or after the event was
+     *                          disposed
      * @param catchThrowables   Specifies whether <code>dispatch</code>
      *                          should catch Throwable when executing
      *                          the <code>Runnable</code>'s <code>run</code>
@@ -239,7 +237,7 @@ public class InvocationEvent extends AWTEvent implements ActiveEvent {
      *                          dispatch loop
      * @throws IllegalArgumentException if <code>source</code> is null
      */
-    private InvocationEvent(Object source, Runnable runnable, Runnable listener,
+    public InvocationEvent(Object source, Runnable runnable, Runnable listener,
                            boolean catchThrowables)  {
         this(source, INVOCATION_DEFAULT, runnable, null, listener, catchThrowables);
     }
@@ -264,7 +262,8 @@ public class InvocationEvent extends AWTEvent implements ActiveEvent {
      * @param notifier          The <code>Object</code> whose <code>notifyAll</code>
      *                          method will be called after
      *                          <code>Runnable.run</code> has returned or
-     *                          thrown an exception
+     *                          thrown an exception or after the event was
+     *                          disposed
      * @param catchThrowables   Specifies whether <code>dispatch</code>
      *                          should catch Throwable when executing the
      *                          <code>Runnable</code>'s <code>run</code>

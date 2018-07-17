@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -61,7 +61,7 @@ import java.security.AccessControlException;
  * <p>
  * The default layout for a dialog is <code>BorderLayout</code>.
  * <p>
- * A dialog may have its native decorations (i.e. Frame & Titlebar) turned off
+ * A dialog may have its native decorations (i.e. Frame &amp; Titlebar) turned off
  * with <code>setUndecorated</code>.  This can only be done while the dialog
  * is not {@link Component#isDisplayable() displayable}.
  * <p>
@@ -338,7 +338,7 @@ public class Dialog extends Window {
      *
      * @param owner the owner of the dialog or <code>null</code> if
      *     this dialog has no owner
-     * @param modal specifes whether dialog blocks user input to other top-level
+     * @param modal specifies whether dialog blocks user input to other top-level
      *     windows when shown. If <code>false</code>, the dialog is <code>MODELESS</code>;
      *     if <code>true</code>, the modality type property is set to
      *     <code>DEFAULT_MODALITY_TYPE</code>
@@ -387,7 +387,7 @@ public class Dialog extends Window {
      *     this dialog has no owner
      * @param title the title of the dialog or <code>null</code> if this dialog
      *     has no title
-     * @param modal specifes whether dialog blocks user input to other top-level
+     * @param modal specifies whether dialog blocks user input to other top-level
      *     windows when shown. If <code>false</code>, the dialog is <code>MODELESS</code>;
      *     if <code>true</code>, the modality type property is set to
      *     <code>DEFAULT_MODALITY_TYPE</code>
@@ -416,7 +416,7 @@ public class Dialog extends Window {
      *     has no owner
      * @param title the title of the dialog or <code>null</code> if this dialog
      *     has no title
-     * @param modal specifes whether dialog blocks user input to other top-level
+     * @param modal specifies whether dialog blocks user input to other top-level
      *     windows when shown. If <code>false</code>, the dialog is <code>MODELESS</code>;
      *     if <code>true</code>, the modality type property is set to
      *     <code>DEFAULT_MODALITY_TYPE</code>
@@ -488,7 +488,7 @@ public class Dialog extends Window {
      *     dialog has no owner
      * @param title the title of the dialog or <code>null</code> if this
      *     dialog has no title
-     * @param modal specifes whether dialog blocks user input to other top-level
+     * @param modal specifies whether dialog blocks user input to other top-level
      *     windows when shown. If <code>false</code>, the dialog is <code>MODELESS</code>;
      *     if <code>true</code>, the modality type property is set to
      *     <code>DEFAULT_MODALITY_TYPE</code>
@@ -519,7 +519,7 @@ public class Dialog extends Window {
      *     dialog has no owner
      * @param title the title of the dialog or <code>null</code> if this
      *     dialog has no title
-     * @param modal specifes whether dialog blocks user input to other top-level
+     * @param modal specifies whether dialog blocks user input to other top-level
      *     windows when shown. If <code>false</code>, the dialog is <code>MODELESS</code>;
      *     if <code>true</code>, the modality type property is set to
      *     <code>DEFAULT_MODALITY_TYPE</code>
@@ -764,7 +764,7 @@ public class Dialog extends Window {
     /**
      * Indicates whether the dialog is modal.
      * <p>
-     * This method is obsolete and is kept for backwards compatiblity only.
+     * This method is obsolete and is kept for backwards compatibility only.
      * Use {@link #getModalityType getModalityType()} instead.
      *
      * @return    <code>true</code> if this dialog window is modal;
@@ -926,7 +926,7 @@ public class Dialog extends Window {
                     isEnabled() && !isModalBlocked()) {
                     // keep the KeyEvents from being dispatched
                     // until the focus has been transfered
-                    time.set(Toolkit.getEventQueue().getMostRecentEventTimeEx());
+                    time.set(Toolkit.getEventQueue().getMostRecentKeyEventTime());
                     KeyboardFocusManager.getCurrentKeyboardFocusManager().
                         enqueueKeyEvents(time.get(), toFocus);
                 }
@@ -1027,8 +1027,10 @@ public class Dialog extends Window {
      */
     @Deprecated
     public void show() {
-        if (!initialized) throw new IllegalStateException(
-            "The dialog component has not been initialized properly");
+        if (!initialized) {
+            throw new IllegalStateException("The dialog component " +
+                "has not been initialized properly");
+        }
 
         beforeFirstShow = false;
         if (!isModal()) {
@@ -1052,9 +1054,9 @@ public class Dialog extends Window {
                     // if this dialog is toolkit-modal, the filter should be added
                     // to all EDTs (for all AppContexts)
                     if (modalityType == ModalityType.TOOLKIT_MODAL) {
-                        Iterator it = AppContext.getAppContexts().iterator();
+                        Iterator<AppContext> it = AppContext.getAppContexts().iterator();
                         while (it.hasNext()) {
-                            AppContext appContext = (AppContext)it.next();
+                            AppContext appContext = it.next();
                             if (appContext == showAppContext) {
                                 continue;
                             }
@@ -1089,9 +1091,9 @@ public class Dialog extends Window {
                     // if this dialog is toolkit-modal, its filter must be removed
                     // from all EDTs (for all AppContexts)
                     if (modalityType == ModalityType.TOOLKIT_MODAL) {
-                        Iterator it = AppContext.getAppContexts().iterator();
+                        Iterator<AppContext> it = AppContext.getAppContexts().iterator();
                         while (it.hasNext()) {
-                            AppContext appContext = (AppContext)it.next();
+                            AppContext appContext = it.next();
                             if (appContext == showAppContext) {
                                 continue;
                             }
@@ -1401,7 +1403,7 @@ public class Dialog extends Window {
             if (d.shouldBlock(this)) {
                 Window w = d;
                 while ((w != null) && (w != this)) {
-                    w = (Window)(w.getOwner_NoClientCode());
+                    w = w.getOwner_NoClientCode();
                 }
                 if ((w == this) || !shouldBlock(d) || (modalityType.compareTo(d.getModalityType()) < 0)) {
                     blockers.add(d);
@@ -1622,7 +1624,7 @@ public class Dialog extends Window {
         GraphicsEnvironment.checkHeadless();
 
         java.io.ObjectInputStream.GetField fields =
-                    s.readFields();
+            s.readFields();
 
         ModalityType localModalityType = (ModalityType)fields.get("modalityType", null);
 
@@ -1644,7 +1646,7 @@ public class Dialog extends Window {
         this.undecorated = fields.get("undecorated", false);
         this.title = (String)fields.get("title", "");
 
-        blockedWindows = new IdentityArrayList();
+        blockedWindows = new IdentityArrayList<>();
 
         SunToolkit.checkAndSetPolicy(this);
 

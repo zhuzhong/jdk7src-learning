@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -45,7 +45,6 @@ import javax.management.DescriptorRead;
 import javax.management.ImmutableDescriptor;
 import javax.management.MBeanAttributeInfo;
 import com.sun.jmx.remote.util.EnvHelp;
-import sun.reflect.misc.ConstructorUtil;
 import sun.reflect.misc.MethodUtil;
 import sun.reflect.misc.ReflectUtil;
 
@@ -138,8 +137,8 @@ public class OpenMBeanAttributeInfoSupport
      *
      * <p>The {@code descriptor} can contain entries that will define
      * the values returned by certain methods of this class, as
-     * explained in the {@link <a href="package-summary.html#constraints">
-     * package description</a>}.
+     * explained in the <a href="package-summary.html#constraints">
+     * package description</a>.
      *
      * @param name  cannot be a null or empty string.
      *
@@ -162,8 +161,7 @@ public class OpenMBeanAttributeInfoSupport
      * @throws IllegalArgumentException if {@code name} or {@code
      * description} are null or empty string, or {@code openType} is
      * null, or the descriptor entries are invalid as described in the
-     * {@link <a href="package-summary.html#constraints">package
-     * description</a>}.
+     * <a href="package-summary.html#constraints">package description</a>.
      *
      * @since 1.6
      */
@@ -693,8 +691,9 @@ public class OpenMBeanAttributeInfoSupport
     private static <T> T convertFromString(String s, OpenType<T> openType) {
         Class<T> c;
         try {
-            ReflectUtil.checkPackageAccess(openType.safeGetClassName());
-            c = cast(Class.forName(openType.safeGetClassName()));
+            String className = openType.safeGetClassName();
+            ReflectUtil.checkPackageAccess(className);
+            c = cast(Class.forName(className));
         } catch (ClassNotFoundException e) {
             throw new NoClassDefFoundError(e.toString());  // can't happen
         }
@@ -762,11 +761,15 @@ public class OpenMBeanAttributeInfoSupport
         Class<?> stringArrayClass;
         Class<?> targetArrayClass;
         try {
+            String baseClassName = baseType.safeGetClassName();
+
+            // check access to the provided base type class name and bail out early
+            ReflectUtil.checkPackageAccess(baseClassName);
+
             stringArrayClass =
                 Class.forName(squareBrackets + "Ljava.lang.String;");
             targetArrayClass =
-                Class.forName(squareBrackets + "L" + baseType.safeGetClassName() +
-                              ";");
+                Class.forName(squareBrackets + "L" + baseClassName + ";");
         } catch (ClassNotFoundException e) {
             throw new NoClassDefFoundError(e.toString());  // can't happen
         }

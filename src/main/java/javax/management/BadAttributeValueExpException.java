@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2003, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -44,12 +44,14 @@ public class BadAttributeValueExpException extends Exception   {
     private static final long serialVersionUID = -3105272988410493376L;
 
     /**
-     * @serial The attribute value that originated this exception
+     * @serial A string representation of the attribute that originated this exception.
+     * for example, the string value can be the return of {@code attribute.toString()}
      */
     private Object val;
 
     /**
-     * Constructs an <CODE>BadAttributeValueExpException</CODE> with the specified Object.
+     * Constructs a BadAttributeValueExpException using the specified Object to
+     * create the toString() value.
      *
      * @param val the inappropriate value.
      */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -692,7 +692,7 @@ public abstract class ClassValue<T> {
 
         /** Remove all stale entries, everywhere. */
         private void removeStaleEntries() {
-            Entry[] cache = getCache();
+            Entry<?>[] cache = getCache();
             removeStaleEntries(cache, 0, cache.length + PROBE_LIMIT - 1);
         }
 

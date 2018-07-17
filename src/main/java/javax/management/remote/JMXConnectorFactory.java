@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -138,8 +138,10 @@ import sun.reflect.misc.ReflectUtil;
  * JAR conventions for service providers</a>, where the service
  * interface is <code>JMXConnectorProvider</code>.</p>
  *
- * <p>Every implementation must support the RMI connector protocols,
- * specified with the string <code>rmi</code> or
+ * <p>Every implementation must support the RMI connector protocol with
+ * the default RMI transport, specified with string <code>rmi</code>.
+ * An implementation may optionally support the RMI connector protocol
+ * with the RMI/IIOP transport, specified with the string
  * <code>iiop</code>.</p>
  *
  * <p>Once a provider is found, the result of the

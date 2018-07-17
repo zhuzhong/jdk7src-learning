@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2009, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -208,7 +208,7 @@ class KeyboardManager {
     public boolean fireKeyboardAction(KeyEvent e, boolean pressed, Container topAncestor) {
 
          if (e.isConsumed()) {
-              System.out.println("Aquired pre-used event!");
+              System.out.println("Acquired pre-used event!");
               Thread.dumpStack();
          }
 

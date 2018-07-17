@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -80,7 +80,7 @@ import java.lang.reflect.Proxy;
    </pre>
    </blockquote>
 
-   A call to {@code nn.getNumber()} will then return <b>5</b>.</p>
+   A call to {@code nn.getNumber()} will then return <b>5</b>.
 
    <p>If the first letter of the property defined by a getter is a
    capital, then this handler will look first for an item in the
@@ -123,11 +123,6 @@ public class CompositeDataInvocationHandler implements InvocationHandler {
     /**
        <p>Construct a handler backed by the given {@code
        CompositeData}.</p>
-
-       @param mbsc the {@code MBeanServerConnection} related to this
-       {@code CompositeData}.  This is only relevant if a method in
-       the interface for which this is an invocation handler returns
-       a type that is an MXBean interface.  Otherwise, it can be null.
 
        @param compositeData the {@code CompositeData} that will supply
        information to getters.

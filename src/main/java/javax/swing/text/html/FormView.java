@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -161,7 +161,7 @@ public class FormView extends ComponentView implements ActionListener {
         Object model = attr.getAttribute(StyleConstants.ModelAttribute);
 
         // Remove listeners previously registered in shared model
-        // when a new UI component is replaced.  See bug 8008289.
+        // when a new UI component is replaced.  See bug 7189299.
         removeStaleListenerForModel(model);
         if (t == HTML.Tag.INPUT) {
             c = createInputComponent(attr, model);
@@ -380,7 +380,7 @@ public class FormView extends ComponentView implements ActionListener {
      * axis of interest.
      *
      * @param axis may be either View.X_AXIS or View.Y_AXIS
-     * @return   the span the view would like to be rendered into >= 0.
+     * @return   the span the view would like to be rendered into &gt;= 0.
      *           Typically the view is told to render into the span
      *           that is returned, although there is no guarantee.
      *           The parent may choose to resize or break the view.
@@ -663,7 +663,7 @@ public class FormView extends ComponentView implements ActionListener {
 
                     if (type != null && type.equals("submit") &&
                         next != getElement()) {
-                        // do nothing - this submit isnt the trigger
+                        // do nothing - this submit is not the trigger
                     } else if (type == null || !type.equals("image")) {
                         // images only result in data if they triggered
                         // the submit and they require that the mouse click
@@ -786,11 +786,11 @@ public class FormView extends ComponentView implements ActionListener {
         }
         Object m = attr.getAttribute(StyleConstants.ModelAttribute);
         if (m instanceof OptionListModel) {
-            OptionListModel model = (OptionListModel)m;
+            OptionListModel<Option> model = (OptionListModel<Option>) m;
 
             for (int i = 0; i < model.getSize(); i++) {
                 if (model.isSelectedIndex(i)) {
-                    Option option = (Option) model.getElementAt(i);
+                    Option option = model.getElementAt(i);
                     appendBuffer(buffer, name, option.getValue());
                 }
             }

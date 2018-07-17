@@ -34,7 +34,6 @@ import java.awt.print.*;
 
 import java.beans.*;
 
-import java.io.Serializable;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
 import java.io.IOException;
@@ -58,12 +57,11 @@ import sun.swing.SwingUtilities2;
 import sun.swing.SwingUtilities2.Section;
 import static sun.swing.SwingUtilities2.Section.*;
 import sun.swing.PrintingStatus;
-import sun.swing.SwingLazyValue;
 
 /**
  * The <code>JTable</code> is used to display and edit regular two-dimensional tables
  * of cells.
- * See <a href="http://java.sun.com/docs/books/tutorial/uiswing/components/table.html">How to Use Tables</a>
+ * See <a href="https://docs.oracle.com/javase/tutorial/uiswing/components/table.html">How to Use Tables</a>
  * in <em>The Java Tutorial</em>
  * for task-oriented documentation and examples of using <code>JTable</code>.
  *
@@ -73,7 +71,7 @@ import sun.swing.SwingLazyValue;
  * but provides defaults for these features so that simple tables can be
  * set up easily.  For example, to set up a table with 10 rows and 10
  * columns of numbers:
- * <p>
+ *
  * <pre>
  *      TableModel dataModel = new AbstractTableModel() {
  *          public int getColumnCount() { return 10; }
@@ -201,7 +199,7 @@ import sun.swing.SwingLazyValue;
  * future Swing releases. The current serialization support is
  * appropriate for short term storage or RMI between applications running
  * the same version of Swing.  As of 1.4, support for long term storage
- * of all JavaBeans<sup><font size="-2">TM</font></sup>
+ * of all JavaBeans&trade;
  * has been added to the <code>java.beans</code> package.
  * Please see {@link java.beans.XMLEncoder}.
  *
@@ -659,7 +657,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * should contain the values for that row. In other words,
      * the value of the cell at row 1, column 5 can be obtained
      * with the following code:
-     * <p>
+     *
      * <pre>((Vector)rowData.elementAt(1)).elementAt(5);</pre>
      * <p>
      * @param rowData           the data for the new table
@@ -674,7 +672,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * <code>rowData</code>, with column names, <code>columnNames</code>.
      * <code>rowData</code> is an array of rows, so the value of the cell at row 1,
      * column 5 can be obtained with the following code:
-     * <p>
+     *
      * <pre> rowData[1][5]; </pre>
      * <p>
      * All rows must be of the same length as <code>columnNames</code>.
@@ -1825,6 +1823,8 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * table.  While the {@code autoCreateRowSorter} property remains
      * {@code true}, every time the model is changed, a new {@code
      * TableRowSorter} is created and set as the table's row sorter.
+     * The default value for the {@code autoCreateRowSorter}
+     * property is {@code false}.
      *
      * @param autoCreateRowSorter whether or not a {@code RowSorter}
      *        should be automatically created
@@ -1944,7 +1944,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * Sets the table's selection mode to allow only single selections, a single
      * contiguous interval, or multiple intervals.
      * <P>
-     * <bold>Note:</bold>
+     * <b>Note:</b>
      * <code>JTable</code> provides all the methods for handling
      * column and row selection.  When setting states,
      * such as <code>setSelectionMode</code>, it not only
@@ -2060,7 +2060,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
 
     /**
      * Returns true if both row and column selection models are enabled.
-     * Equivalent to <code>getRowSelectionAllowed() &&
+     * Equivalent to <code>getRowSelectionAllowed() &amp;&amp;
      * getColumnSelectionAllowed()</code>.
      *
      * @return true if both row and column selection models are enabled
@@ -2488,7 +2488,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * The default value of this property is defined by the look
      * and feel implementation.
      * <p>
-     * This is a <a href="http://java.sun.com/docs/books/tutorial/javabeans/properties/bound.html">JavaBeans</a> bound property.
+     * This is a <a href="https://docs.oracle.com/javase/tutorial/javabeans/writing/properties.html">JavaBeans</a> bound property.
      *
      * @param selectionForeground  the <code>Color</code> to use in the foreground
      *                             for selected list items
@@ -2526,7 +2526,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * The default value of this property is defined by the look
      * and feel implementation.
      * <p>
-     * This is a <a href="http://java.sun.com/docs/books/tutorial/javabeans/properties/bound.html">JavaBeans</a> bound property.
+     * This is a <a href="https://docs.oracle.com/javase/tutorial/javabeans/writing/properties.html">JavaBeans</a> bound property.
      *
      * @param selectionBackground  the <code>Color</code> to use for the background
      *                             of selected cells
@@ -2989,7 +2989,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
 
     /**
      * Causes this table to lay out its rows and columns.  Overridden so
-     * that columns can be resized to accomodate a change in the size of
+     * that columns can be resized to accommodate a change in the size of
      * a containing parent.
      * Resizes one or more of the columns in the table
      * so that the total width of all of this <code>JTable</code>'s
@@ -3012,7 +3012,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * The modes are:
      * <ul>
      * <li>  AUTO_RESIZE_OFF: Don't automatically adjust the column's
-     * widths at all. Use a horizontal scrollbar to accomodate the
+     * widths at all. Use a horizontal scrollbar to accommodate the
      * columns when their sum exceeds the width of the
      * <code>Viewport</code>.  If the <code>JTable</code> is not
      * enclosed in a <code>JScrollPane</code> this may
@@ -3033,7 +3033,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * adjusted.
      * </ul>
      * <p>
-     * <bold>Note:</bold> When a <code>JTable</code> makes adjustments
+     * <b>Note:</b> When a <code>JTable</code> makes adjustments
      *   to the widths of the columns it respects their minimum and
      *   maximum values absolutely.  It is therefore possible that,
      *   even after this method is called, the total width of the columns
@@ -3060,9 +3060,9 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      *   interface that allows any data structure containing a collection
      *   of elements with a size, preferred size, maximum size and minimum size
      *   to have its elements manipulated by the algorithm.
-     * <p>
+     *
      * <H3> Distributing the delta </H3>
-     * <p>
+     *
      * <H4> Overview </H4>
      * <P>
      * Call "DELTA" the difference between the target size and the
@@ -3071,7 +3071,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * sizes and adding a share of the DELTA - that share being based on
      * how far each preferred size is from its limiting bound (minimum or
      * maximum).
-     * <p>
+     *
      * <H4>Definition</H4>
      * <P>
      * Call the individual constraints min[i], max[i], and pref[i].
@@ -3079,21 +3079,21 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * Call their respective sums: MIN, MAX, and PREF.
      * <p>
      * Each new size will be calculated using:
-     * <p>
+     *
      * <pre>
      *          size[i] = pref[i] + delta[i]
      * </pre>
      * where each individual delta[i] is calculated according to:
      * <p>
-     * If (DELTA < 0) we are in shrink mode where:
-     * <p>
+     * If (DELTA &lt; 0) we are in shrink mode where:
+     *
      * <PRE>
      *                        DELTA
      *          delta[i] = ------------ * (pref[i] - min[i])
      *                     (PREF - MIN)
      * </PRE>
-     * If (DELTA > 0) we are in expand mode where:
-     * <p>
+     * If (DELTA &gt; 0) we are in expand mode where:
+     *
      * <PRE>
      *                        DELTA
      *          delta[i] = ------------ * (max[i] - pref[i])
@@ -3102,7 +3102,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * <P>
      * The overall effect is that the total size moves that same percentage,
      * k, towards the total minimum or maximum and that percentage guarantees
-     * accomodation of the required space, DELTA.
+     * accommodation of the required space, DELTA.
      *
      * <H4>Details</H4>
      * <P>
@@ -3367,7 +3367,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * method in order to allow the renderer's tips to be used
      * if it has text set.
      * <p>
-     * <bold>Note:</bold> For <code>JTable</code> to properly display
+     * <b>Note:</b> For <code>JTable</code> to properly display
      * tooltips of its renderers
      * <code>JTable</code> must be a registered component with the
      * <code>ToolTipManager</code>.
@@ -3579,7 +3579,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
 //
 
     /**
-     * Returns the L&F object that renders this component.
+     * Returns the L&amp;F object that renders this component.
      *
      * @return the <code>TableUI</code> object that renders this component
      */
@@ -3588,9 +3588,9 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
     }
 
     /**
-     * Sets the L&F object that renders this component and repaints.
+     * Sets the L&amp;F object that renders this component and repaints.
      *
-     * @param ui  the TableUI L&F object
+     * @param ui  the TableUI L&amp;F object
      * @see UIDefaults#getUI
      * @beaninfo
      *        bound: true
@@ -3606,7 +3606,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
     }
 
     /**
-     * Notification from the <code>UIManager</code> that the L&F has changed.
+     * Notification from the <code>UIManager</code> that the L&amp;F has changed.
      * Replaces the current UI object with the latest version from the
      * <code>UIManager</code>.
      *
@@ -3646,7 +3646,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
     }
 
     /**
-     * Returns the suffix used to construct the name of the L&F class used to
+     * Returns the suffix used to construct the name of the L&amp;F class used to
      * render this component.
      *
      * @return the string "TableUI"
@@ -5305,14 +5305,6 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
         return retValue;
     }
 
-    private void setLazyValue(Hashtable h, Class c, String s) {
-        h.put(c, new SwingLazyValue(s));
-    }
-
-    private void setLazyRenderer(Class c, String s) {
-        setLazyValue(defaultRenderersByColumnClass, c, s);
-    }
-
     /**
      * Creates default cell renderers for objects, numbers, doubles, dates,
      * booleans, and icons.
@@ -5323,24 +5315,24 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
         defaultRenderersByColumnClass = new UIDefaults(8, 0.75f);
 
         // Objects
-        setLazyRenderer(Object.class, "javax.swing.table.DefaultTableCellRenderer$UIResource");
+        defaultRenderersByColumnClass.put(Object.class, (UIDefaults.LazyValue) t -> new DefaultTableCellRenderer.UIResource());
 
         // Numbers
-        setLazyRenderer(Number.class, "javax.swing.JTable$NumberRenderer");
+        defaultRenderersByColumnClass.put(Number.class, (UIDefaults.LazyValue) t -> new NumberRenderer());
 
         // Doubles and Floats
-        setLazyRenderer(Float.class, "javax.swing.JTable$DoubleRenderer");
-        setLazyRenderer(Double.class, "javax.swing.JTable$DoubleRenderer");
+        defaultRenderersByColumnClass.put(Float.class, (UIDefaults.LazyValue) t -> new DoubleRenderer());
+        defaultRenderersByColumnClass.put(Double.class, (UIDefaults.LazyValue) t -> new DoubleRenderer());
 
         // Dates
-        setLazyRenderer(Date.class, "javax.swing.JTable$DateRenderer");
+        defaultRenderersByColumnClass.put(Date.class, (UIDefaults.LazyValue) t -> new DateRenderer());
 
         // Icons and ImageIcons
-        setLazyRenderer(Icon.class, "javax.swing.JTable$IconRenderer");
-        setLazyRenderer(ImageIcon.class, "javax.swing.JTable$IconRenderer");
+        defaultRenderersByColumnClass.put(Icon.class, (UIDefaults.LazyValue) t -> new IconRenderer());
+        defaultRenderersByColumnClass.put(ImageIcon.class, (UIDefaults.LazyValue) t -> new IconRenderer());
 
         // Booleans
-        setLazyRenderer(Boolean.class, "javax.swing.JTable$BooleanRenderer");
+        defaultRenderersByColumnClass.put(Boolean.class, (UIDefaults.LazyValue) t -> new BooleanRenderer());
     }
 
     /**
@@ -5418,10 +5410,6 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
         }
     }
 
-    private void setLazyEditor(Class c, String s) {
-        setLazyValue(defaultEditorsByColumnClass, c, s);
-    }
-
     /**
      * Creates default cell editors for objects, numbers, and boolean values.
      * @see DefaultCellEditor
@@ -5430,13 +5418,13 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
         defaultEditorsByColumnClass = new UIDefaults(3, 0.75f);
 
         // Objects
-        setLazyEditor(Object.class, "javax.swing.JTable$GenericEditor");
+        defaultEditorsByColumnClass.put(Object.class, (UIDefaults.LazyValue) t -> new GenericEditor());
 
         // Numbers
-        setLazyEditor(Number.class, "javax.swing.JTable$NumberEditor");
+        defaultEditorsByColumnClass.put(Number.class, (UIDefaults.LazyValue) t -> new NumberEditor());
 
         // Booleans
-        setLazyEditor(Boolean.class, "javax.swing.JTable$BooleanEditor");
+        defaultEditorsByColumnClass.put(Boolean.class, (UIDefaults.LazyValue) t -> new BooleanEditor());
     }
 
     /**
@@ -5461,7 +5449,6 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
             // they have the option to replace the value with
             // null or use escape to restore the original.
             // For Strings, return "" for backward compatibility.
-
             try {
                 if ("".equals(s)) {
                     if (constructor.getDeclaringClass() == String.class) {
@@ -6372,7 +6359,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * <p>
      * Here's an example of creating a <code>MessageFormat</code> that can be
      * used to print "Duke's Table: Page - " and the current page number:
-     * <p>
+     *
      * <pre>
      *     // notice the escaping of the single quote
      *     // notice how the page number is included with "{0}"
@@ -6578,7 +6565,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
      * future Swing releases. The current serialization support is
      * appropriate for short term storage or RMI between applications running
      * the same version of Swing.  As of 1.4, support for long term storage
-     * of all JavaBeans<sup><font size="-2">TM</font></sup>
+     * of all JavaBeans&trade;
      * has been added to the <code>java.beans</code> package.
      * Please see {@link java.beans.XMLEncoder}.
      */
@@ -6938,10 +6925,10 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
             // is focused but not selected (Ctrl+up/down)
             int focusedRow = JTable.this.getSelectionModel().getLeadSelectionIndex();
             int focusedCol = JTable.this.getColumnModel().getSelectionModel().
-                                                    getLeadSelectionIndex();
+                                                            getLeadSelectionIndex();
 
             if (focusedRow != previousFocusedRow ||
-                focusedCol != previousFocusedCol){
+                focusedCol != previousFocusedCol) {
                 Accessible oldA = getAccessibleAt(previousFocusedRow, previousFocusedCol);
                 Accessible newA = getAccessibleAt(focusedRow, focusedCol);
                 firePropertyChange(AccessibleContext.ACCESSIBLE_ACTIVE_DESCENDANT_PROPERTY,
@@ -7690,7 +7677,7 @@ public class JTable extends JComponent implements TableModelListener, Scrollable
              * Returns a boolean value indicating whether the specified column
              * is selected.
              *
-             * @param r zero-based column of the table
+             * @param c zero-based column of the table
              * @return the boolean value true if the specified column is selected.
              * Otherwise, false.
              * @since 1.3

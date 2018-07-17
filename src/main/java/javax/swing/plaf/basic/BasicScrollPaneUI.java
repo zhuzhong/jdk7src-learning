@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -45,7 +45,7 @@ import java.awt.Graphics;
 import java.awt.event.*;
 
 /**
- * A default L&F implementation of ScrollPaneUI.
+ * A default L&amp;F implementation of ScrollPaneUI.
  *
  * @author Hans Muller
  */
@@ -443,7 +443,7 @@ public class BasicScrollPaneUI
     public class ViewportChangeHandler implements ChangeListener
     {
 
-        // NOTE: This class exists only for backward compatability. All
+        // NOTE: This class exists only for backward compatibility. All
         // its functionality has been moved into Handler. If you need to add
         // new functionality add it to the Handler, but make sure this
         // class calls into the Handler.
@@ -464,7 +464,7 @@ public class BasicScrollPaneUI
     public class HSBChangeListener implements ChangeListener
     {
 
-        // NOTE: This class exists only for backward compatability. All
+        // NOTE: This class exists only for backward compatibility. All
         // its functionality has been moved into Handler. If you need to add
         // new functionality add it to the Handler, but make sure this
         // class calls into the Handler.
@@ -494,7 +494,7 @@ public class BasicScrollPaneUI
     public class VSBChangeListener implements ChangeListener
     {
 
-        // NOTE: This class exists only for backward compatability. All
+        // NOTE: This class exists only for backward compatibility. All
         // its functionality has been moved into Handler. If you need to add
         // new functionality add it to the Handler, but make sure this
         // class calls into the Handler.
@@ -534,7 +534,7 @@ public class BasicScrollPaneUI
      */
     protected class MouseWheelHandler implements MouseWheelListener {
 
-        // NOTE: This class exists only for backward compatability. All
+        // NOTE: This class exists only for backward compatibility. All
         // its functionality has been moved into Handler. If you need to add
         // new functionality add it to the Handler, but make sure this
         // class calls into the Handler.
@@ -665,7 +665,7 @@ public class BasicScrollPaneUI
     public class PropertyChangeHandler implements PropertyChangeListener
     {
 
-        // NOTE: This class exists only for backward compatability. All
+        // NOTE: This class exists only for backward compatibility. All
         // its functionality has been moved into Handler. If you need to add
         // new functionality add it to the Handler, but make sure this
         // class calls into the Handler.
@@ -870,7 +870,8 @@ public class BasicScrollPaneUI
                 int orientation = SwingConstants.VERTICAL;
 
                 // find which scrollbar to scroll, or return if none
-                if (toScroll == null || !toScroll.isVisible()) {
+                if (toScroll == null || !toScroll.isVisible()
+                        || e.isShiftDown()) {
                     toScroll = scrollpane.getHorizontalScrollBar();
                     if (toScroll == null || !toScroll.isVisible()) {
                         return;

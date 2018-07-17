@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -26,7 +26,6 @@
 package java.lang.invoke;
 
 import java.lang.invoke.MethodHandles.Lookup;
-import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
 import static java.lang.invoke.MethodHandleNatives.Constants.*;
 import static java.lang.invoke.MethodHandleStatics.*;
@@ -34,7 +33,7 @@ import static java.lang.invoke.MethodHandles.Lookup.IMPL_LOOKUP;
 
 /**
  * The JVM interface for the method handles package is all here.
- * This is an interface internal and private to an implemetantion of JSR 292.
+ * This is an interface internal and private to an implementation of JSR 292.
  * <em>This class is not part of the JSR 292 standard.</em>
  * @author jrose
  */
@@ -46,7 +45,7 @@ class MethodHandleNatives {
 
     static native void init(MemberName self, Object ref);
     static native void expand(MemberName self);
-    static native MemberName resolve(MemberName self, Class<?> caller) throws LinkageError;
+    static native MemberName resolve(MemberName self, Class<?> caller) throws LinkageError, ClassNotFoundException;
     static native int getMembers(Class<?> defc, String matchName, String matchSig,
             int matchFlags, Class<?> caller, int skip, MemberName[] results);
 
@@ -79,7 +78,7 @@ class MethodHandleNatives {
 
         // The JVM calls MethodHandleNatives.<clinit>.  Cascade the <clinit> calls as needed:
         MethodHandleImpl.initStatics();
-}
+    }
 
     // All compile-time constants go here.
     // There is an opportunity to check them against the JVM's idea of them.
@@ -206,6 +205,9 @@ class MethodHandleNatives {
     static boolean refKindIsMethod(byte refKind) {
         return !refKindIsField(refKind) && (refKind != REF_newInvokeSpecial);
     }
+    static boolean refKindIsConstructor(byte refKind) {
+        return (refKind == REF_newInvokeSpecial);
+    }
     static boolean refKindHasReceiver(byte refKind) {
         assert(refKindIsValid(refKind));
         return (refKind & 1) != 0;
@@ -231,20 +233,19 @@ class MethodHandleNatives {
     }
     static String refKindName(byte refKind) {
         assert(refKindIsValid(refKind));
-        return REFERENCE_KIND_NAME[refKind];
+        switch (refKind) {
+        case REF_getField:          return "getField";
+        case REF_getStatic:         return "getStatic";
+        case REF_putField:          return "putField";
+        case REF_putStatic:         return "putStatic";
+        case REF_invokeVirtual:     return "invokeVirtual";
+        case REF_invokeStatic:      return "invokeStatic";
+        case REF_invokeSpecial:     return "invokeSpecial";
+        case REF_newInvokeSpecial:  return "newInvokeSpecial";
+        case REF_invokeInterface:   return "invokeInterface";
+        default:                    return "REF_???";
+        }
     }
-    private static String[] REFERENCE_KIND_NAME = {
-            null,
-            "getField",
-            "getStatic",
-            "putField",
-            "putStatic",
-            "invokeVirtual",
-            "invokeStatic",
-            "invokeSpecial",
-            "newInvokeSpecial",
-            "invokeInterface"
-    };
 
     private static native int getNamedCon(int which, Object[] name);
     static boolean verifyConstants() {
@@ -292,12 +293,53 @@ class MethodHandleNatives {
         Class<?> caller = (Class<?>)callerObj;
         String name = nameObj.toString().intern();
         MethodType type = (MethodType)typeObj;
-        appendixResult[0] = CallSite.makeSite(bootstrapMethod,
+        if (!TRACE_METHOD_LINKAGE)
+            return linkCallSiteImpl(caller, bootstrapMethod, name, type,
+                                    staticArguments, appendixResult);
+        return linkCallSiteTracing(caller, bootstrapMethod, name, type,
+                                   staticArguments, appendixResult);
+    }
+    static MemberName linkCallSiteImpl(Class<?> caller,
+                                       MethodHandle bootstrapMethod,
+                                       String name, MethodType type,
+                                       Object staticArguments,
+                                       Object[] appendixResult) {
+        CallSite callSite = CallSite.makeSite(bootstrapMethod,
                                               name,
                                               type,
                                               staticArguments,
                                               caller);
-        return Invokers.linkToCallSiteMethod(type);
+        if (callSite instanceof ConstantCallSite) {
+            appendixResult[0] = callSite.dynamicInvoker();
+            return Invokers.linkToTargetMethod(type);
+        } else {
+            appendixResult[0] = callSite;
+            return Invokers.linkToCallSiteMethod(type);
+        }
+    }
+    // Tracing logic:
+    static MemberName linkCallSiteTracing(Class<?> caller,
+                                          MethodHandle bootstrapMethod,
+                                          String name, MethodType type,
+                                          Object staticArguments,
+                                          Object[] appendixResult) {
+        Object bsmReference = bootstrapMethod.internalMemberName();
+        if (bsmReference == null)  bsmReference = bootstrapMethod;
+        Object staticArglist = (staticArguments instanceof Object[] ?
+                                java.util.Arrays.asList((Object[]) staticArguments) :
+                                staticArguments);
+        System.out.println("linkCallSite "+caller.getName()+" "+
+                           bsmReference+" "+
+                           name+type+"/"+staticArglist);
+        try {
+            MemberName res = linkCallSiteImpl(caller, bootstrapMethod, name, type,
+                                              staticArguments, appendixResult);
+            System.out.println("linkCallSite => "+res+" + "+appendixResult[0]);
+            return res;
+        } catch (Throwable ex) {
+            System.out.println("linkCallSite => throw "+ex);
+            throw ex;
+        }
     }
 
     /**
@@ -314,7 +356,65 @@ class MethodHandleNatives {
      * The method assumes the following arguments on the stack:
      * 0: the method handle being invoked
      * 1-N: the arguments to the method handle invocation
-     * N+1: an implicitly added type argument (the given MethodType)
+     * N+1: an optional, implicitly added argument (typically the given MethodType)
+     * <p>
+     * The nominal method at such a call site is an instance of
+     * a signature-polymorphic method (see @PolymorphicSignature).
+     * Such method instances are user-visible entities which are
+     * "split" from the generic placeholder method in {@code MethodHandle}.
+     * (Note that the placeholder method is not identical with any of
+     * its instances.  If invoked reflectively, is guaranteed to throw an
+     * {@code UnsupportedOperationException}.)
+     * If the signature-polymorphic method instance is ever reified,
+     * it appears as a "copy" of the original placeholder
+     * (a native final member of {@code MethodHandle}) except
+     * that its type descriptor has shape required by the instance,
+     * and the method instance is <em>not</em> varargs.
+     * The method instance is also marked synthetic, since the
+     * method (by definition) does not appear in Java source code.
+     * <p>
+     * The JVM is allowed to reify this method as instance metadata.
+     * For example, {@code invokeBasic} is always reified.
+     * But the JVM may instead call {@code linkMethod}.
+     * If the result is an * ordered pair of a {@code (method, appendix)},
+     * the method gets all the arguments (0..N inclusive)
+     * plus the appendix (N+1), and uses the appendix to complete the call.
+     * In this way, one reusable method (called a "linker method")
+     * can perform the function of any number of polymorphic instance
+     * methods.
+     * <p>
+     * Linker methods are allowed to be weakly typed, with any or
+     * all references rewritten to {@code Object} and any primitives
+     * (except {@code long}/{@code float}/{@code double})
+     * rewritten to {@code int}.
+     * A linker method is trusted to return a strongly typed result,
+     * according to the specific method type descriptor of the
+     * signature-polymorphic instance it is emulating.
+     * This can involve (as necessary) a dynamic check using
+     * data extracted from the appendix argument.
+     * <p>
+     * The JVM does not inspect the appendix, other than to pass
+     * it verbatim to the linker method at every call.
+     * This means that the JDK runtime has wide latitude
+     * for choosing the shape of each linker method and its
+     * corresponding appendix.
+     * Linker methods should be generated from {@code LambdaForm}s
+     * so that they do not become visible on stack traces.
+     * <p>
+     * The {@code linkMethod} call is free to omit the appendix
+     * (returning null) and instead emulate the required function
+     * completely in the linker method.
+     * As a corner case, if N==255, no appendix is possible.
+     * In this case, the method returned must be custom-generated to
+     * to perform any needed type checking.
+     * <p>
+     * If the JVM does not reify a method at a call site, but instead
+     * calls {@code linkMethod}, the corresponding call represented
+     * in the bytecodes may mention a valid method which is not
+     * representable with a {@code MemberName}.
+     * Therefore, use cases for {@code linkMethod} tend to correspond to
+     * special cases in reflective code such as {@code findVirtual}
+     * or {@code revealDirect}.
      */
     static MemberName linkMethod(Class<?> callerClass, int refKind,
                                  Class<?> defc, String name, Object type,
@@ -328,12 +428,7 @@ class MethodHandleNatives {
                                      Object[] appendixResult) {
         try {
             if (defc == MethodHandle.class && refKind == REF_invokeVirtual) {
-                switch (name) {
-                case "invoke":
-                    return Invokers.genericInvokerMethod(fixMethodType(callerClass, type), appendixResult);
-                case "invokeExact":
-                    return Invokers.exactInvokerMethod(fixMethodType(callerClass, type), appendixResult);
-                }
+                return Invokers.methodHandleInvokeLinkerMethod(name, fixMethodType(callerClass, type), appendixResult);
             }
         } catch (Throwable ex) {
             if (ex instanceof LinkageError)
@@ -380,11 +475,36 @@ class MethodHandleNatives {
             Lookup lookup = IMPL_LOOKUP.in(callerClass);
             assert(refKindIsValid(refKind));
             return lookup.linkMethodHandleConstant((byte) refKind, defc, name, type);
+        } catch (IllegalAccessException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof AbstractMethodError) {
+                throw (AbstractMethodError) cause;
+            } else {
+                Error err = new IllegalAccessError(ex.getMessage());
+                throw initCauseFrom(err, ex);
+            }
+        } catch (NoSuchMethodException ex) {
+            Error err = new NoSuchMethodError(ex.getMessage());
+            throw initCauseFrom(err, ex);
+        } catch (NoSuchFieldException ex) {
+            Error err = new NoSuchFieldError(ex.getMessage());
+            throw initCauseFrom(err, ex);
         } catch (ReflectiveOperationException ex) {
             Error err = new IncompatibleClassChangeError();
-            err.initCause(ex);
-            throw err;
+            throw initCauseFrom(err, ex);
         }
+    }
+
+    /**
+     * Use best possible cause for err.initCause(), substituting the
+     * cause for err itself if the cause has the same (or better) type.
+     */
+    static private Error initCauseFrom(Error err, Exception ex) {
+        Throwable th = ex.getCause();
+        if (err.getClass().isInstance(th))
+           return (Error) th;
+        err.initCause(th == null ? ex : th);
+        return err;
     }
 
     /**
@@ -393,128 +513,12 @@ class MethodHandleNatives {
      * to ask about the identity of its caller?
      */
     static boolean isCallerSensitive(MemberName mem) {
-        if (!mem.isMethod())  return false;  // only methods are caller sensitive
+        if (!mem.isInvocable())  return false;  // fields are not caller sensitive
 
-        // when the VM support is available, call mem.isCallerSensitive() instead
-        return isCallerSensitiveMethod(mem.getDeclaringClass(), mem.getName()) ||
-                  canBeCalledVirtual(mem);
+        return mem.isCallerSensitive() || canBeCalledVirtual(mem);
     }
 
-    // this method is also called by test/sun/reflect/CallerSensitiveFinder
-    // to validate the hand-maintained list
-    private static boolean isCallerSensitiveMethod(Class<?> defc, String method) {
-        switch (method) {
-        case "doPrivileged":
-        case "doPrivilegedWithCombiner":
-            return defc == java.security.AccessController.class;
-        case "checkMemberAccess":
-            return defc == java.lang.SecurityManager.class;
-        case "getUnsafe":
-            return defc == sun.misc.Unsafe.class;
-        case "lookup":
-            return defc == java.lang.invoke.MethodHandles.class;
-        case "invoke":
-            return defc == java.lang.reflect.Method.class;
-        case "get":
-        case "getBoolean":
-        case "getByte":
-        case "getChar":
-        case "getShort":
-        case "getInt":
-        case "getLong":
-        case "getFloat":
-        case "getDouble":
-        case "set":
-        case "setBoolean":
-        case "setByte":
-        case "setChar":
-        case "setShort":
-        case "setInt":
-        case "setLong":
-        case "setFloat":
-        case "setDouble":
-            return defc == java.lang.reflect.Field.class;
-        case "newInstance":
-            if (defc == java.lang.reflect.Constructor.class)  return true;
-            if (defc == java.lang.Class.class)  return true;
-            break;
-        case "getFields":
-            return defc == java.lang.Class.class ||
-                   defc == javax.sql.rowset.serial.SerialJavaObject.class;
-        case "forName":
-        case "getClassLoader":
-        case "getClasses":
-        case "getMethods":
-        case "getConstructors":
-        case "getDeclaredClasses":
-        case "getDeclaredFields":
-        case "getDeclaredMethods":
-        case "getDeclaredConstructors":
-        case "getField":
-        case "getMethod":
-        case "getConstructor":
-        case "getDeclaredField":
-        case "getDeclaredMethod":
-        case "getDeclaredConstructor":
-        case "getDeclaringClass":
-        case "getEnclosingClass":
-        case "getEnclosingMethod":
-        case "getEnclosingConstructor":
-            return defc == java.lang.Class.class;
-        case "getConnection":
-        case "getDriver":
-        case "getDrivers":
-        case "deregisterDriver":
-            return defc == java.sql.DriverManager.class;
-        case "newUpdater":
-            if (defc == java.util.concurrent.atomic.AtomicIntegerFieldUpdater.class)  return true;
-            if (defc == java.util.concurrent.atomic.AtomicLongFieldUpdater.class)  return true;
-            if (defc == java.util.concurrent.atomic.AtomicReferenceFieldUpdater.class)  return true;
-            break;
-        case "getContextClassLoader":
-            return defc == java.lang.Thread.class;
-        case "getPackage":
-        case "getPackages":
-            return defc == java.lang.Package.class;
-        case "getParent":
-        case "getSystemClassLoader":
-            return defc == java.lang.ClassLoader.class;
-        case "load":
-        case "loadLibrary":
-            if (defc == java.lang.Runtime.class)  return true;
-            if (defc == java.lang.System.class)  return true;
-            break;
-        case "getCallerClass":
-            if (defc == sun.reflect.Reflection.class)  return true;
-            if (defc == java.lang.System.class)  return true;
-            break;
-        case "getCallerClassLoader":
-            return defc == java.lang.ClassLoader.class;
-        case "registerAsParallelCapable":
-            return defc == java.lang.ClassLoader.class;
-        case "getInvocationHandler":
-        case "getProxyClass":
-        case "newProxyInstance":
-            return defc == java.lang.reflect.Proxy.class;
-        case "asInterfaceInstance":
-            return defc == java.lang.invoke.MethodHandleProxies.class;
-        case "getBundle":
-        case "clearCache":
-            return defc == java.util.ResourceBundle.class;
-        case "getType":
-            return defc == java.io.ObjectStreamField.class;
-        case "forClass":
-            return defc == java.io.ObjectStreamClass.class;
-        case "getLogger":
-            return defc == java.util.logging.Logger.class;
-        case "getAnonymousLogger":
-            return defc == java.util.logging.Logger.class;
-        }
-        return false;
-    }
-
-
-    private static boolean canBeCalledVirtual(MemberName mem) {
+    static boolean canBeCalledVirtual(MemberName mem) {
         assert(mem.isInvocable());
         Class<?> defc = mem.getDeclaringClass();
         switch (mem.getName()) {

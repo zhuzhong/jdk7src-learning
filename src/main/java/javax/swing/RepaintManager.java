@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -45,6 +45,8 @@ import sun.misc.SharedSecrets;
 import sun.security.action.GetPropertyAction;
 
 import com.sun.java.swing.SwingUtilities3;
+import sun.swing.SwingAccessor;
+import sun.swing.SwingUtilities2.RepaintListener;
 
 /**
  * This class manages repaint requests, allowing the number
@@ -179,11 +181,29 @@ public class RepaintManager
      */
     private final ProcessingRunnable processingRunnable;
 
-    private final static JavaSecurityAccess javaSecurityAccess =
-        SharedSecrets.getJavaSecurityAccess();
+    private static final JavaSecurityAccess javaSecurityAccess =
+            SharedSecrets.getJavaSecurityAccess();
 
+    /**
+     * Listener installed to detect display changes. When display changes,
+     * schedules a callback to notify all RepaintManagers of the display
+     * changes.
+     */
+    private static final DisplayChangedListener displayChangedHandler =
+            new DisplayChangedHandler();
 
     static {
+        SwingAccessor.setRepaintManagerAccessor(new SwingAccessor.RepaintManagerAccessor() {
+            @Override
+            public void addRepaintListener(RepaintManager rm, RepaintListener l) {
+                rm.addRepaintListener(l);
+            }
+            @Override
+            public void removeRepaintListener(RepaintManager rm, RepaintListener l) {
+                rm.removeRepaintListener(l);
+            }
+        });
+
         volatileImageBufferEnabled = "true".equals(AccessController.
                 doPrivileged(new GetPropertyAction(
                 "swing.volatileImageBufferEnabled", "true")));
@@ -212,8 +232,8 @@ public class RepaintManager
         GraphicsEnvironment ge = GraphicsEnvironment.
                 getLocalGraphicsEnvironment();
         if (ge instanceof SunGraphicsEnvironment) {
-            ((SunGraphicsEnvironment)ge).addDisplayChangedListener(
-                    new DisplayChangedHandler());
+            ((SunGraphicsEnvironment) ge).addDisplayChangedListener(
+                    displayChangedHandler);
         }
         Toolkit tk = Toolkit.getDefaultToolkit();
         if ((tk instanceof SunToolkit)
@@ -698,7 +718,7 @@ public class RepaintManager
 
     /**
      * This is invoked to process paint requests.  It's needed
-     * for backward compatability in so far as RepaintManager would previously
+     * for backward compatibility in so far as RepaintManager would previously
      * not see paint requests for top levels, so, we have to make sure
      * a subclass correctly paints any dirty top levels.
      */
@@ -778,7 +798,6 @@ public class RepaintManager
 
         final java.util.List<Component> roots =
             new ArrayList<Component>(tmpDirtyComponents.size());
-
         for (Component dirty : tmpDirtyComponents.keySet()) {
             collectDirtyComponents(tmpDirtyComponents, dirty, roots);
         }
@@ -786,16 +805,20 @@ public class RepaintManager
         final AtomicInteger count = new AtomicInteger(roots.size());
         painting = true;
         try {
-            for(int j = 0; j < count.get(); j++) {
+            for (int j=0 ; j < count.get(); j++) {
                 final int i = j;
                 final Component dirtyComponent = roots.get(j);
-
                 AccessControlContext stack = AccessController.getContext();
                 AccessControlContext acc =
                     AWTAccessor.getComponentAccessor().getAccessControlContext(dirtyComponent);
                 javaSecurityAccess.doIntersectionPrivilege(new PrivilegedAction<Void>() {
                     public Void run() {
                         Rectangle rect = tmpDirtyComponents.get(dirtyComponent);
+                        // Sometimes when RepaintManager is changed during the painting
+                        // we may get null here, see #6995769 for details
+                        if (rect == null) {
+                            return null;
+                        }
 
                         int localBoundsH = dirtyComponent.getHeight();
                         int localBoundsW = dirtyComponent.getWidth();
@@ -1111,9 +1134,9 @@ public class RepaintManager
             }
         }
         // Clear out the VolatileImages
-        Iterator gcs = volatileMap.keySet().iterator();
+        Iterator<GraphicsConfiguration> gcs = volatileMap.keySet().iterator();
         while (gcs.hasNext()) {
-            GraphicsConfiguration gc = (GraphicsConfiguration)gcs.next();
+            GraphicsConfiguration gc = gcs.next();
             VolatileImage image = volatileMap.get(gc);
             if (image.getWidth() > width || image.getHeight() > height) {
                 image.flush();
@@ -1262,6 +1285,33 @@ public class RepaintManager
     void copyArea(JComponent c, Graphics g, int x, int y, int w, int h,
                   int deltaX, int deltaY, boolean clip) {
         getPaintManager().copyArea(c, g, x, y, w, h, deltaX, deltaY, clip);
+    }
+
+    private java.util.List<RepaintListener> repaintListeners = new ArrayList<>(1);
+
+    private void addRepaintListener(RepaintListener l) {
+        repaintListeners.add(l);
+    }
+
+    private void removeRepaintListener(RepaintListener l) {
+        repaintListeners.remove(l);
+    }
+
+    /**
+     * Notify the attached repaint listeners that an area of the {@code c} component
+     * has been immediately repainted, that is without scheduling a repaint runnable,
+     * due to performing a "blit" (via calling the {@code copyArea} method).
+     *
+     * @param c the component
+     * @param x the x coordinate of the area
+     * @param y the y coordinate of the area
+     * @param w the width of the area
+     * @param h the height of the area
+     */
+    void notifyRepaintPerformed(JComponent c, int x, int y, int w, int h) {
+        for (RepaintListener l : repaintListeners) {
+            l.repaintPerformed(c, x, y, w, h);
+        }
     }
 
     /**
@@ -1606,6 +1656,12 @@ public class RepaintManager
      */
     private static final class DisplayChangedHandler implements
                                              DisplayChangedListener {
+        // Empty non private constructor was added because access to this
+        // class shouldn't be generated by the compiler using synthetic
+        // accessor method
+        DisplayChangedHandler() {
+        }
+
         public void displayChanged() {
             scheduleDisplayChanges();
         }
@@ -1613,11 +1669,10 @@ public class RepaintManager
         public void paletteChanged() {
         }
 
-        private void scheduleDisplayChanges() {
+        private static void scheduleDisplayChanges() {
             // To avoid threading problems, we notify each RepaintManager
             // on the thread it was created on.
-            for (Object c : AppContext.getAppContexts()) {
-                AppContext context = (AppContext) c;
+            for (AppContext context : AppContext.getAppContexts()) {
                 synchronized(context) {
                     if (!context.isDisposed()) {
                         EventQueue eventQueue = (EventQueue)context.get(

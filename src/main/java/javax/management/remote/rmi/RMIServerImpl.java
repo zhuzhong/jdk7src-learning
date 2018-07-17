@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -117,7 +117,7 @@ public abstract class RMIServerImpl implements Closeable, RMIServer {
      * server.</p>
      *
      * @return the default <code>ClassLoader</code> used by this
-     * connector server.</p>
+     * connector server.
      *
      * @see #setDefaultClassLoader
      */

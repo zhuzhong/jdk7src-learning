@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -42,7 +42,7 @@ import javax.swing.*;
  * future Swing releases. The current serialization support is
  * appropriate for short term storage or RMI between applications running
  * the same version of Swing.  As of 1.4, support for long term storage
- * of all JavaBeans<sup><font size="-2">TM</font></sup>
+ * of all JavaBeans&trade;
  * has been added to the <code>java.beans</code> package.
  * Please see {@link java.beans.XMLEncoder}.
  *
@@ -78,7 +78,7 @@ public class ListSelectionEvent extends EventObject
 
     /**
      * Returns the index of the first row whose selection may have changed.
-     * {@code getFirstIndex() &lt;= getLastIndex()}
+     * {@code getFirstIndex() <= getLastIndex()}
      *
      * @return the first row whose selection value may have changed,
      *         where zero is the first row
@@ -87,7 +87,7 @@ public class ListSelectionEvent extends EventObject
 
     /**
      * Returns the index of the last row whose selection may have changed.
-     * {@code getLastIndex() &gt;= getFirstIndex()}
+     * {@code getLastIndex() >= getFirstIndex()}
      *
      * @return the last row whose selection value may have changed,
      *         where zero is the first row

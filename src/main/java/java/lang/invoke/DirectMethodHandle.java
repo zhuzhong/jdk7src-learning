@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -50,15 +50,15 @@ class DirectMethodHandle extends MethodHandle {
     // Constructors and factory methods in this class *must* be package scoped or private.
     private DirectMethodHandle(MethodType mtype, LambdaForm form, MemberName member) {
         super(mtype, form);
-        if (!member.isResolved())
-            throw new InternalError();
+        if (!member.isResolved())  throw new InternalError();
 
         if (member.getDeclaringClass().isInterface() &&
                 member.isMethod() && !member.isAbstract()) {
-           // Check for corner case: invokeinterface of Object method
+            // Check for corner case: invokeinterface of Object method
             MemberName m = new MemberName(Object.class, member.getName(), member.getMethodType(), member.getReferenceKind());
             m = MemberName.getFactory().resolveOrNull(m.getReferenceKind(), m, null);
             if (m != null && m.isPublic()) {
+                assert(member.getReferenceKind() == m.getReferenceKind());  // else this.form is wrong
                 member = m;
             }
         }
@@ -67,8 +67,7 @@ class DirectMethodHandle extends MethodHandle {
     }
 
     // Factory methods:
-
-    static DirectMethodHandle make(Class<?> receiver, MemberName member) {
+    static DirectMethodHandle make(byte refKind, Class<?> receiver, MemberName member) {
         MethodType mtype = member.getMethodOrFieldType();
         if (!member.isStatic()) {
             if (!member.getDeclaringClass().isAssignableFrom(receiver) || member.isConstructor())
@@ -76,8 +75,14 @@ class DirectMethodHandle extends MethodHandle {
             mtype = mtype.insertParameterTypes(0, receiver);
         }
         if (!member.isField()) {
-            LambdaForm lform = preparedLambdaForm(member);
-            return new DirectMethodHandle(mtype, lform, member);
+            if (refKind == REF_invokeSpecial) {
+                member = member.asSpecial();
+                LambdaForm lform = preparedLambdaForm(member);
+                return new Special(mtype, lform, member);
+            } else {
+                LambdaForm lform = preparedLambdaForm(member);
+                return new DirectMethodHandle(mtype, lform, member);
+            }
         } else {
             LambdaForm lform = preparedFieldLambdaForm(member);
             if (member.isStatic()) {
@@ -90,6 +95,12 @@ class DirectMethodHandle extends MethodHandle {
                 return new Accessor(mtype, lform, member, (int)offset);
             }
         }
+    }
+    static DirectMethodHandle make(Class<?> receiver, MemberName member) {
+        byte refKind = member.getReferenceKind();
+        if (refKind == REF_invokeSpecial)
+            refKind =  REF_invokeVirtual;
+        return make(refKind, receiver, member);
     }
     static DirectMethodHandle make(MemberName member) {
         if (member.isConstructor())
@@ -115,13 +126,19 @@ class DirectMethodHandle extends MethodHandle {
     }
 
     @Override
+    BoundMethodHandle rebind() {
+        return BoundMethodHandle.makeReinvoker(this);
+    }
+
+    @Override
     MethodHandle copyWith(MethodType mt, LambdaForm lf) {
+        assert(this.getClass() == DirectMethodHandle.class);  // must override in subclasses
         return new DirectMethodHandle(mt, lf, member);
     }
 
     @Override
     String internalProperties() {
-        return "/DMH="+member.toString();
+        return "\n& DMH.MN="+internalMemberName();
     }
 
     //// Implementation methods.
@@ -131,44 +148,7 @@ class DirectMethodHandle extends MethodHandle {
         return member;
     }
 
-    @Override
-    MethodHandle bindArgument(int pos, char basicType, Object value) {
-        // If the member needs dispatching, do so.
-        if (pos == 0 && basicType == 'L') {
-            DirectMethodHandle concrete = maybeRebind(value);
-            if (concrete != null)
-                return concrete.bindReceiver(value);
-        }
-        return super.bindArgument(pos, basicType, value);
-    }
-
-    @Override
-    MethodHandle bindReceiver(Object receiver) {
-        // If the member needs dispatching, do so.
-        DirectMethodHandle concrete = maybeRebind(receiver);
-        if (concrete != null)
-            return concrete.bindReceiver(receiver);
-        return super.bindReceiver(receiver);
-    }
-
     private static final MemberName.Factory IMPL_NAMES = MemberName.getFactory();
-
-    private DirectMethodHandle maybeRebind(Object receiver) {
-        if (receiver != null) {
-            switch (member.getReferenceKind()) {
-            case REF_invokeInterface:
-            case REF_invokeVirtual:
-                // Pre-dispatch the member.
-                Class<?> concreteClass = receiver.getClass();
-                MemberName concrete = new MemberName(concreteClass, member.getName(), member.getMethodType(), REF_invokeSpecial);
-                concrete = IMPL_NAMES.resolveOrNull(REF_invokeSpecial, concrete, concreteClass);
-                if (concrete != null)
-                    return new DirectMethodHandle(type(), preparedLambdaForm(concrete), concrete);
-                break;
-            }
-        }
-        return null;
-    }
 
     /**
      * Create a LF which can invoke the given method.
@@ -178,7 +158,7 @@ class DirectMethodHandle extends MethodHandle {
     private static LambdaForm preparedLambdaForm(MemberName m) {
         assert(m.isInvocable()) : m;  // call preparedFieldLambdaForm instead
         MethodType mtype = m.getInvocationType().basicType();
-        assert(!m.isMethodHandleInvoke() || "invokeBasic".equals(m.getName())) : m;
+        assert(!m.isMethodHandleInvoke()) : m;
         int which;
         switch (m.getReferenceKind()) {
         case REF_invokeVirtual:    which = LF_INVVIRTUAL;    break;
@@ -250,9 +230,10 @@ class DirectMethodHandle extends MethodHandle {
         } else {
             names[GET_MEMBER] = new Name(Lazy.NF_internalMemberName, names[DMH_THIS]);
         }
+        assert(findDirectMethodHandle(names[GET_MEMBER]) == names[DMH_THIS]);
         Object[] outArgs = Arrays.copyOfRange(names, ARG_BASE, GET_MEMBER+1, Object[].class);
         assert(outArgs[outArgs.length-1] == names[GET_MEMBER]);  // look, shifted args!
-        int result = LambdaForm.LAST_RESULT;
+        int result = LAST_RESULT;
         if (doesAlloc) {
             assert(outArgs[outArgs.length-2] == names[NEW_OBJ]);  // got to move this one
             System.arraycopy(outArgs, 0, outArgs, 1, outArgs.length-2);
@@ -260,11 +241,21 @@ class DirectMethodHandle extends MethodHandle {
             result = NEW_OBJ;
         }
         names[LINKER_CALL] = new Name(linker, outArgs);
-        lambdaName += "_" + LambdaForm.basicTypeSignature(mtype);
+        lambdaName += "_" + shortenSignature(basicTypeSignature(mtype));
         LambdaForm lform = new LambdaForm(lambdaName, ARG_LIMIT, names, result);
         // This is a tricky bit of code.  Don't send it through the LF interpreter.
         lform.compileToBytecode();
         return lform;
+    }
+
+    static Object findDirectMethodHandle(Name name) {
+        if (name.function == Lazy.NF_internalMemberName ||
+            name.function == Lazy.NF_internalMemberNameEnsureInit ||
+            name.function == Lazy.NF_constructorMethod) {
+            assert(name.arguments.length == 1);
+            return name.arguments[0];
+        }
+        return null;
     }
 
     private static void maybeCompile(LambdaForm lform, MemberName m) {
@@ -369,6 +360,21 @@ class DirectMethodHandle extends MethodHandle {
         ((DirectMethodHandle)mh).ensureInitialized();
     }
 
+    /** This subclass represents invokespecial instructions. */
+    static class Special extends DirectMethodHandle {
+        private Special(MethodType mtype, LambdaForm form, MemberName member) {
+            super(mtype, form, member);
+        }
+        @Override
+        boolean isInvokeSpecial() {
+            return true;
+        }
+        @Override
+        MethodHandle copyWith(MethodType mt, LambdaForm lf) {
+            return new Special(mt, lf, member);
+        }
+    }
+
     /** This subclass handles constructor references. */
     static class Constructor extends DirectMethodHandle {
         final MemberName initMethod;
@@ -380,6 +386,10 @@ class DirectMethodHandle extends MethodHandle {
             this.initMethod = initMethod;
             this.instanceClass = instanceClass;
             assert(initMethod.isResolved());
+        }
+        @Override
+        MethodHandle copyWith(MethodType mt, LambdaForm lf) {
+            return new Constructor(mt, lf, member, initMethod, instanceClass);
         }
     }
 
@@ -406,6 +416,10 @@ class DirectMethodHandle extends MethodHandle {
 
         @Override Object checkCast(Object obj) {
             return fieldType.cast(obj);
+        }
+        @Override
+        MethodHandle copyWith(MethodType mt, LambdaForm lf) {
+            return new Accessor(mt, lf, member, fieldOffset);
         }
     }
 
@@ -445,6 +459,10 @@ class DirectMethodHandle extends MethodHandle {
 
         @Override Object checkCast(Object obj) {
             return fieldType.cast(obj);
+        }
+        @Override
+        MethodHandle copyWith(MethodType mt, LambdaForm lf) {
+            return new StaticAccessor(mt, lf, member, staticBase, staticOffset);
         }
     }
 

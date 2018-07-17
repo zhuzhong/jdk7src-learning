@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -25,11 +25,9 @@
 
 package javax.script;
 import java.util.*;
-import java.net.URL;
-import java.io.*;
 import java.security.*;
-import sun.misc.Service;
-import sun.misc.ServiceConfigurationError;
+import java.util.ServiceLoader;
+import java.util.ServiceConfigurationError;
 
 /**
  * The <code>ScriptEngineManager</code> implements a discovery and instantiation
@@ -53,10 +51,8 @@ import sun.misc.ServiceConfigurationError;
 public class ScriptEngineManager  {
     private static final boolean DEBUG = false;
     /**
-     * If the thread context ClassLoader can be accessed by the caller,
-     * then the effect of calling this constructor is the same as calling
+     * The effect of calling this constructor is the same as calling
      * <code>ScriptEngineManager(Thread.currentThread().getContextClassLoader())</code>.
-     * Otherwise, the effect is the same as calling <code>ScriptEngineManager(null)</code>.
      *
      * @see java.lang.Thread#getContextClassLoader
      */
@@ -85,25 +81,29 @@ public class ScriptEngineManager  {
         nameAssociations = new HashMap<String, ScriptEngineFactory>();
         extensionAssociations = new HashMap<String, ScriptEngineFactory>();
         mimeTypeAssociations = new HashMap<String, ScriptEngineFactory>();
-        List<ScriptEngineFactory> facList = AccessController.doPrivileged(
-            new PrivilegedAction<List<ScriptEngineFactory>>() {
-                public List<ScriptEngineFactory> run() {
-                    return initEngines(loader);
-                }
-            });
-        for (ScriptEngineFactory fac : facList) {
-            engineSpis.add(fac);
+        initEngines(loader);
+    }
+
+    private ServiceLoader<ScriptEngineFactory> getServiceLoader(final ClassLoader loader) {
+        if (loader != null) {
+            return ServiceLoader.load(ScriptEngineFactory.class, loader);
+        } else {
+            return ServiceLoader.loadInstalled(ScriptEngineFactory.class);
         }
     }
 
-    private List<ScriptEngineFactory> initEngines(final ClassLoader loader) {
-        Iterator itr = null;
+    private void initEngines(final ClassLoader loader) {
+        Iterator<ScriptEngineFactory> itr = null;
         try {
-            if (loader != null) {
-                itr = Service.providers(ScriptEngineFactory.class, loader);
-            } else {
-                itr = Service.installedProviders(ScriptEngineFactory.class);
-            }
+            ServiceLoader<ScriptEngineFactory> sl = AccessController.doPrivileged(
+                new PrivilegedAction<ServiceLoader<ScriptEngineFactory>>() {
+                    @Override
+                    public ServiceLoader<ScriptEngineFactory> run() {
+                        return getServiceLoader(loader);
+                    }
+                });
+
+            itr = sl.iterator();
         } catch (ServiceConfigurationError err) {
             System.err.println("Can't find ScriptEngineFactory providers: " +
                           err.getMessage());
@@ -113,15 +113,14 @@ public class ScriptEngineManager  {
             // do not throw any exception here. user may want to
             // manage his/her own factories using this manager
             // by explicit registratation (by registerXXX) methods.
-            return null;
+            return;
         }
 
-        final List<ScriptEngineFactory> facList = new ArrayList<>();
         try {
             while (itr.hasNext()) {
                 try {
-                    ScriptEngineFactory fact = (ScriptEngineFactory) itr.next();
-                    facList.add(fact);
+                    ScriptEngineFactory fact = itr.next();
+                    engineSpis.add(fact);
                 } catch (ServiceConfigurationError err) {
                     System.err.println("ScriptEngineManager providers.next(): "
                                  + err.getMessage());
@@ -141,8 +140,8 @@ public class ScriptEngineManager  {
             // do not throw any exception here. user may want to
             // manage his/her own factories using this manager
             // by explicit registratation (by registerXXX) methods.
+            return;
         }
-        return facList;
     }
 
     /**

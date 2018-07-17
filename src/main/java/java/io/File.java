@@ -129,7 +129,7 @@ import sun.security.action.GetPropertyAction;
  * created, the abstract pathname represented by a <code>File</code> object
  * will never change.
  *
- * <h4>Interoperability with {@code java.nio.file} package</h4>
+ * <h3>Interoperability with {@code java.nio.file} package</h3>
  *
  * <p> The <a href="../../java/nio/file/package-summary.html">{@code java.nio.file}</a>
  * package defines interfaces and classes for the Java virtual machine to access
@@ -153,7 +153,7 @@ public class File
     /**
      * The FileSystem object representing the platform's local file system.
      */
-    static private FileSystem fs = FileSystem.getFileSystem();
+    private static final FileSystem fs = DefaultFileSystem.getFileSystem();
 
     /**
      * This abstract pathname's normalized pathname string. A normalized
@@ -162,7 +162,7 @@ public class File
      *
      * @serial
      */
-    private String path;
+    private final String path;
 
     /**
      * Enum type that indicates the status of a file path.
@@ -194,7 +194,7 @@ public class File
      * The length of this abstract pathname's prefix, or zero if it has no
      * prefix.
      */
-    private transient int prefixLength;
+    private final transient int prefixLength;
 
     /**
      * Returns the length of this abstract pathname's prefix.
@@ -743,7 +743,10 @@ public class File
 
     /**
      * Tests whether the application can read the file denoted by this
-     * abstract pathname.
+     * abstract pathname. On some platforms it may be possible to start the
+     * Java virtual machine with special privileges that allow it to read
+     * files that are marked as unreadable. Consequently this method may return
+     * {@code true} even though the file does not have read permissions.
      *
      * @return  <code>true</code> if and only if the file specified by this
      *          abstract pathname exists <em>and</em> can be read by the
@@ -767,7 +770,10 @@ public class File
 
     /**
      * Tests whether the application can modify the file denoted by this
-     * abstract pathname.
+     * abstract pathname. On some platforms it may be possible to start the
+     * Java virtual machine with special privileges that allow it to modify
+     * files that are marked read-only. Consequently this method may return
+     * {@code true} even though the file is marked read-only.
      *
      * @return  <code>true</code> if and only if the file system actually
      *          contains a file denoted by this abstract pathname <em>and</em>
@@ -1431,9 +1437,11 @@ public class File
 
     /**
      * Marks the file or directory named by this abstract pathname so that
-     * only read operations are allowed.  After invoking this method the file
-     * or directory is guaranteed not to change until it is either deleted or
-     * marked to allow write access.  Whether or not a read-only file or
+     * only read operations are allowed. After invoking this method the file
+     * or directory will not change until it is either deleted or marked
+     * to allow write access. On some platforms it may be possible to start the
+     * Java virtual machine with special privileges that allow it to modify
+     * files that are marked read-only. Whether or not a read-only file or
      * directory may be deleted depends upon the underlying system.
      *
      * @return <code>true</code> if and only if the operation succeeded;
@@ -1459,7 +1467,9 @@ public class File
 
     /**
      * Sets the owner's or everybody's write permission for this abstract
-     * pathname.
+     * pathname. On some platforms it may be possible to start the Java virtual
+     * machine with special privileges that allow it to modify files that
+     * disallow write operations.
      *
      * <p> The {@link java.nio.file.Files} class defines methods that operate on
      * file attributes including file permissions. This may be used when finer
@@ -1500,7 +1510,9 @@ public class File
 
     /**
      * A convenience method to set the owner's write permission for this abstract
-     * pathname.
+     * pathname. On some platforms it may be possible to start the Java virtual
+     * machine with special privileges that allow it to modify files that
+     * disallow write operations.
      *
      * <p> An invocation of this method of the form <tt>file.setWritable(arg)</tt>
      * behaves in exactly the same way as the invocation
@@ -1529,7 +1541,9 @@ public class File
 
     /**
      * Sets the owner's or everybody's read permission for this abstract
-     * pathname.
+     * pathname. On some platforms it may be possible to start the Java virtual
+     * machine with special privileges that allow it to read files that are
+     * marked as unreadable.
      *
      * <p> The {@link java.nio.file.Files} class defines methods that operate on
      * file attributes including file permissions. This may be used when finer
@@ -1573,7 +1587,9 @@ public class File
 
     /**
      * A convenience method to set the owner's read permission for this abstract
-     * pathname.
+     * pathname. On some platforms it may be possible to start the Java virtual
+     * machine with special privileges that allow it to read files that that are
+     * marked as unreadable.
      *
      * <p>An invocation of this method of the form <tt>file.setReadable(arg)</tt>
      * behaves in exactly the same way as the invocation
@@ -1605,7 +1621,9 @@ public class File
 
     /**
      * Sets the owner's or everybody's execute permission for this abstract
-     * pathname.
+     * pathname. On some platforms it may be possible to start the Java virtual
+     * machine with special privileges that allow it to execute files that are
+     * not marked executable.
      *
      * <p> The {@link java.nio.file.Files} class defines methods that operate on
      * file attributes including file permissions. This may be used when finer
@@ -1648,8 +1666,10 @@ public class File
     }
 
     /**
-     * A convenience method to set the owner's execute permission for this abstract
-     * pathname.
+     * A convenience method to set the owner's execute permission for this
+     * abstract pathname. On some platforms it may be possible to start the Java
+     * virtual machine with special privileges that allow it to execute files
+     * that are not marked executable.
      *
      * <p>An invocation of this method of the form <tt>file.setExcutable(arg)</tt>
      * behaves in exactly the same way as the invocation
@@ -1665,7 +1685,7 @@ public class File
      *           operation will fail if the user does not have permission to
      *           change the access permissions of this abstract pathname.  If
      *           <code>executable</code> is <code>false</code> and the underlying
-     *           file system does not implement an excute permission, then the
+     *           file system does not implement an execute permission, then the
      *           operation will fail.
      *
      * @throws  SecurityException
@@ -1681,7 +1701,10 @@ public class File
 
     /**
      * Tests whether the application can execute the file denoted by this
-     * abstract pathname.
+     * abstract pathname. On some platforms it may be possible to start the
+     * Java virtual machine with special privileges that allow it to execute
+     * files that are not marked executable. Consequently this method may return
+     * {@code true} even though the file does not have execute permissions.
      *
      * @return  <code>true</code> if and only if the abstract pathname exists
      *          <em>and</em> the application is allowed to execute the file
@@ -2130,7 +2153,7 @@ public class File
         throws IOException
     {
         s.defaultWriteObject();
-        s.writeChar(this.separatorChar); // Add the separator character
+        s.writeChar(separatorChar); // Add the separator character
     }
 
     /**
@@ -2147,9 +2170,27 @@ public class File
         char sep = s.readChar(); // read the previous separator char
         if (sep != separatorChar)
             pathField = pathField.replace(sep, separatorChar);
-        this.path = fs.normalize(pathField);
-        this.prefixLength = fs.prefixLength(this.path);
+        String path = fs.normalize(pathField);
+        UNSAFE.putObject(this, PATH_OFFSET, path);
+        UNSAFE.putIntVolatile(this, PREFIX_LENGTH_OFFSET, fs.prefixLength(path));
     }
+
+    private static final long PATH_OFFSET;
+    private static final long PREFIX_LENGTH_OFFSET;
+    private static final sun.misc.Unsafe UNSAFE;
+    static {
+        try {
+            sun.misc.Unsafe unsafe = sun.misc.Unsafe.getUnsafe();
+            PATH_OFFSET = unsafe.objectFieldOffset(
+                    File.class.getDeclaredField("path"));
+            PREFIX_LENGTH_OFFSET = unsafe.objectFieldOffset(
+                    File.class.getDeclaredField("prefixLength"));
+            UNSAFE = unsafe;
+        } catch (ReflectiveOperationException e) {
+            throw new Error(e);
+        }
+    }
+
 
     /** use serialVersionUID from JDK 1.0.2 for interoperability */
     private static final long serialVersionUID = 301077366599181567L;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2004, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -133,6 +133,8 @@ public interface Mixer extends Line {
      * <code>DataLine</code>.
      *
      * @param info describes the desired line
+     * @return a line that is available for use and that matches the description
+     * in the specified {@code Line.Info} object
      * @throws LineUnavailableException if a matching line
      * is not available due to resource restrictions
      * @throws IllegalArgumentException if this mixer does

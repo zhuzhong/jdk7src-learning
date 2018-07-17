@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2008, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -31,11 +31,11 @@ import sun.misc.JavaLangAccess;
 import sun.misc.SharedSecrets;
 import sun.misc.VM;
 
-final class Finalizer extends FinalReference { /* Package-private; must be in
-                                                  same package as the Reference
-                                                  class */
+final class Finalizer extends FinalReference<Object> { /* Package-private; must be in
+                                                          same package as the Reference
+                                                          class */
 
-    private static ReferenceQueue queue = new ReferenceQueue();
+    private static ReferenceQueue<Object> queue = new ReferenceQueue<>();
     private static Finalizer unfinalized = null;
     private static final Object lock = new Object();
 

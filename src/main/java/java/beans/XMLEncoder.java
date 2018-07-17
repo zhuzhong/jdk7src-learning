@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -287,8 +287,8 @@ public class XMLEncoder extends Encoder implements AutoCloseable {
         this.declaration = declaration;
         this.indentation = indentation;
         this.out = new OutputStreamWriter(out, cs.newEncoder());
-        valueToExpression = new IdentityHashMap<Object, ValueData>();
-        targetToStatementList = new IdentityHashMap<Object, List<Statement>>();
+        valueToExpression = new IdentityHashMap<>();
+        targetToStatementList = new IdentityHashMap<>();
         nameGenerator = new NameGenerator();
     }
 
@@ -334,7 +334,7 @@ public class XMLEncoder extends Encoder implements AutoCloseable {
     private List<Statement> statementList(Object target) {
         List<Statement> list = targetToStatementList.get(target);
         if (list == null) {
-            list = new ArrayList<Statement>();
+            list = new ArrayList<>();
             targetToStatementList.put(target, list);
         }
         return list;
@@ -621,7 +621,7 @@ public class XMLEncoder extends Encoder implements AutoCloseable {
                 return;
             }
 
-            Class primitiveType = primitiveTypeFor(value.getClass());
+            Class<?> primitiveType = primitiveTypeFor(value.getClass());
             if (primitiveType != null && target == value.getClass() &&
                 methodName.equals("new")) {
                 String primitiveTypeName = primitiveType.getName();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2015, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -123,10 +123,11 @@ class TwoStacksPlainDatagramSocketImpl extends AbstractPlainDatagramSocketImpl
         }
 
         if (optID == SO_BINDADDR) {
-            if (fd != null && fd1 != null) {
+            if ((fd != null && fd1 != null) && !connected) {
                 return anyLocalBoundAddr;
             }
-            return socketGetOption(optID);
+            int family = connectedAddress == null ? -1 : connectedAddress.holder().getFamily();
+            return socketLocalAddress(family);
         } else if (optID == SO_REUSEADDR && reuseAddressEmulated) {
             return isReuseAddress;
         } else {
@@ -179,8 +180,10 @@ class TwoStacksPlainDatagramSocketImpl extends AbstractPlainDatagramSocketImpl
 
     protected native int getTimeToLive() throws IOException;
 
+    @Deprecated
     protected native void setTTL(byte ttl) throws IOException;
 
+    @Deprecated
     protected native byte getTTL() throws IOException;
 
     protected native void join(InetAddress inetaddr, NetworkInterface netIf)
@@ -200,7 +203,11 @@ class TwoStacksPlainDatagramSocketImpl extends AbstractPlainDatagramSocketImpl
 
     protected native void connect0(InetAddress address, int port) throws SocketException;
 
+    protected native Object socketLocalAddress(int family) throws SocketException;
+
     protected native void disconnect0(int family);
+
+    native int dataAvailable();
 
     /**
      * Perform class load-time initializations.

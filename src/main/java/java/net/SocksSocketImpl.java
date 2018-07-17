@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -315,7 +315,7 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
      * grants the connections, then the connect is successful and all
      * further traffic will go to the "real" endpoint.
      *
-     * @param   endpoint        the <code>SocketAddress</code> to connect to.
+     * @param   endpoint        the {@code SocketAddress} to connect to.
      * @param   timeout         the timeout value in milliseconds
      * @throws  IOException     if the connection can't be established.
      * @throws  SecurityException if there is a security manager and it
@@ -436,7 +436,7 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
             }
         }
 
-        // cmdIn & cmdOut were intialized during the privilegedConnect() call
+        // cmdIn & cmdOut were initialized during the privilegedConnect() call
         BufferedOutputStream out = new BufferedOutputStream(cmdOut, 512);
         InputStream in = cmdIn;
 
@@ -650,7 +650,7 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
      * means "accept incoming connection from", so the SocketAddress is the
      * the one of the host we do accept connection from.
      *
-     * @param      addr   the Socket address of the remote host.
+     * @param      saddr   the Socket address of the remote host.
      * @exception  IOException  if an I/O error occurs when binding this socket.
      */
     protected synchronized void socksBind(InetSocketAddress saddr) throws IOException {
@@ -1030,9 +1030,9 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
 
 
     /**
-     * Returns the value of this socket's <code>address</code> field.
+     * Returns the value of this socket's {@code address} field.
      *
-     * @return  the value of this socket's <code>address</code> field.
+     * @return  the value of this socket's {@code address} field.
      * @see     java.net.SocketImpl#address
      */
     @Override
@@ -1044,9 +1044,9 @@ class SocksSocketImpl extends PlainSocketImpl implements SocksConsts {
     }
 
     /**
-     * Returns the value of this socket's <code>port</code> field.
+     * Returns the value of this socket's {@code port} field.
      *
-     * @return  the value of this socket's <code>port</code> field.
+     * @return  the value of this socket's {@code port} field.
      * @see     java.net.SocketImpl#port
      */
     @Override

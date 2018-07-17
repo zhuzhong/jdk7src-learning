@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2015, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -36,11 +36,15 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.WeakHashMap;
-import java.security.AccessController;
-import sun.security.action.GetPropertyAction;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+
 import static java.util.zip.ZipConstants64.*;
 
 /**
@@ -54,7 +58,7 @@ import static java.util.zip.ZipConstants64.*;
  */
 public
 class ZipFile implements ZipConstants, Closeable {
-    private long jzfile;           // address of jzfile data
+    private long jzfile;  // address of jzfile data
     private final String name;     // zip file name
     private final int total;       // total number of entries
     private final boolean locsig;  // if zip file starts with LOCSIG (usually true)
@@ -473,49 +477,80 @@ class ZipFile implements ZipConstants, Closeable {
         return name;
     }
 
+    private class ZipEntryIterator implements Enumeration<ZipEntry>, Iterator<ZipEntry> {
+        private int i = 0;
+
+        public ZipEntryIterator() {
+            ensureOpen();
+        }
+
+        public boolean hasMoreElements() {
+            return hasNext();
+        }
+
+        public boolean hasNext() {
+            synchronized (ZipFile.this) {
+                ensureOpen();
+                return i < total;
+            }
+        }
+
+        public ZipEntry nextElement() {
+            return next();
+        }
+
+        public ZipEntry next() {
+            synchronized (ZipFile.this) {
+                ensureOpen();
+                if (i >= total) {
+                    throw new NoSuchElementException();
+                }
+                long jzentry = getNextEntry(jzfile, i++);
+                if (jzentry == 0) {
+                    String message;
+                    if (closeRequested) {
+                        message = "ZipFile concurrently closed";
+                    } else {
+                        message = getZipMessage(ZipFile.this.jzfile);
+                    }
+                    throw new ZipError("jzentry == 0" +
+                                       ",\n jzfile = " + ZipFile.this.jzfile +
+                                       ",\n total = " + ZipFile.this.total +
+                                       ",\n name = " + ZipFile.this.name +
+                                       ",\n i = " + i +
+                                       ",\n message = " + message
+                        );
+                }
+                ZipEntry ze = getZipEntry(null, jzentry);
+                freeEntry(jzfile, jzentry);
+                return ze;
+            }
+        }
+    }
+
     /**
      * Returns an enumeration of the ZIP file entries.
      * @return an enumeration of the ZIP file entries
      * @throws IllegalStateException if the zip file has been closed
      */
     public Enumeration<? extends ZipEntry> entries() {
-        ensureOpen();
-        return new Enumeration<ZipEntry>() {
-                private int i = 0;
-                public boolean hasMoreElements() {
-                    synchronized (ZipFile.this) {
-                        ensureOpen();
-                        return i < total;
-                    }
-                }
-                public ZipEntry nextElement() throws NoSuchElementException {
-                    synchronized (ZipFile.this) {
-                        ensureOpen();
-                        if (i >= total) {
-                            throw new NoSuchElementException();
-                        }
-                        long jzentry = getNextEntry(jzfile, i++);
-                        if (jzentry == 0) {
-                            String message;
-                            if (closeRequested) {
-                                message = "ZipFile concurrently closed";
-                            } else {
-                                message = getZipMessage(ZipFile.this.jzfile);
-                            }
-                            throw new ZipError("jzentry == 0" +
-                                               ",\n jzfile = " + ZipFile.this.jzfile +
-                                               ",\n total = " + ZipFile.this.total +
-                                               ",\n name = " + ZipFile.this.name +
-                                               ",\n i = " + i +
-                                               ",\n message = " + message
-                                );
-                        }
-                        ZipEntry ze = getZipEntry(null, jzentry);
-                        freeEntry(jzfile, jzentry);
-                        return ze;
-                    }
-                }
-            };
+        return new ZipEntryIterator();
+    }
+
+    /**
+     * Return an ordered {@code Stream} over the ZIP file entries.
+     * Entries appear in the {@code Stream} in the order they appear in
+     * the central directory of the ZIP file.
+     *
+     * @return an ordered {@code Stream} of entries in this ZIP file
+     * @throws IllegalStateException if the zip file has been closed
+     * @since 1.8
+     */
+    public Stream<? extends ZipEntry> stream() {
+        return StreamSupport.stream(Spliterators.spliterator(
+                new ZipEntryIterator(), size(),
+                Spliterator.ORDERED | Spliterator.DISTINCT |
+                        Spliterator.IMMUTABLE | Spliterator.NONNULL), false);
     }
 
     private ZipEntry getZipEntry(String name, long jzentry) {
@@ -531,12 +566,12 @@ class ZipFile implements ZipConstants, Closeable {
                 e.name = zc.toString(bname, bname.length);
             }
         }
-        e.time = getEntryTime(jzentry);
+        e.xdostime = getEntryTime(jzentry);
         e.crc = getEntryCrc(jzentry);
         e.size = getEntrySize(jzentry);
-        e. csize = getEntryCSize(jzentry);
+        e.csize = getEntryCSize(jzentry);
         e.method = getEntryMethod(jzentry);
-        e.extra = getEntryBytes(jzentry, JZENTRY_EXTRA);
+        e.setExtra0(getEntryBytes(jzentry, JZENTRY_EXTRA), false);
         byte[] bcomm = getEntryBytes(jzentry, JZENTRY_COMMENT);
         if (bcomm == null) {
             e.comment = null;
@@ -650,7 +685,7 @@ class ZipFile implements ZipConstants, Closeable {
      * (possibly compressed) zip file entry.
      */
    private class ZipFileInputStream extends InputStream {
-        private volatile boolean closeRequested = false;
+        private volatile boolean zfisCloseRequested = false;
         protected long jzentry; // address of jzentry data
         private   long pos;     // current position within entry data
         protected long rem;     // number of remaining bytes within entry
@@ -664,24 +699,27 @@ class ZipFile implements ZipConstants, Closeable {
         }
 
         public int read(byte b[], int off, int len) throws IOException {
-            if (rem == 0) {
-                return -1;
-            }
-            if (len <= 0) {
-                return 0;
-            }
-            if (len > rem) {
-                len = (int) rem;
-            }
             synchronized (ZipFile.this) {
-                ensureOpenOrZipException();
+                long rem = this.rem;
+                long pos = this.pos;
+                if (rem == 0) {
+                    return -1;
+                }
+                if (len <= 0) {
+                    return 0;
+                }
+                if (len > rem) {
+                    len = (int) rem;
+                }
 
+                // Check if ZipFile open
+                ensureOpenOrZipException();
                 len = ZipFile.read(ZipFile.this.jzfile, jzentry, pos, b,
                                    off, len);
-            }
-            if (len > 0) {
-                pos += len;
-                rem -= len;
+                if (len > 0) {
+                    this.pos = (pos + len);
+                    this.rem = (rem - len);
+                }
             }
             if (rem == 0) {
                 close();
@@ -718,9 +756,9 @@ class ZipFile implements ZipConstants, Closeable {
         }
 
         public void close() {
-            if (closeRequested)
+            if (zfisCloseRequested)
                 return;
-            closeRequested = true;
+            zfisCloseRequested = true;
 
             rem = 0;
             synchronized (ZipFile.this) {

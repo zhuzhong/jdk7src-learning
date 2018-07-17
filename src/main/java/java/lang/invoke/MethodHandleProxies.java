@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -30,9 +30,10 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import sun.invoke.WrapperInstance;
 import java.util.ArrayList;
-import sun.reflect.Reflection;
 import sun.reflect.CallerSensitive;
+import sun.reflect.Reflection;
 import sun.reflect.misc.ReflectUtil;
+import static java.lang.invoke.MethodHandleStatics.*;
 
 /**
  * This class consists exclusively of static methods that help adapt
@@ -107,9 +108,15 @@ public class MethodHandleProxies {
      * such as abstract classes with single abstract methods.
      * Future versions of this API may also equip wrapper instances
      * with one or more additional public "marker" interfaces.
+     * <p>
+     * If a security manager is installed, this method is caller sensitive.
+     * During any invocation of the target method handle via the returned wrapper,
+     * the original creator of the wrapper (the caller) will be visible
+     * to context checks requested by the security manager.
      *
+     * @param <T> the desired type of the wrapper, a single-method interface
+     * @param intfc a class object representing {@code T}
      * @param target the method handle to invoke from the wrapper
-     * @param intfc the desired type of the wrapper, a single-method interface
      * @return a correctly-typed wrapper for the given target
      * @throws NullPointerException if either argument is null
      * @throws IllegalArgumentException if the {@code intfc} is not a
@@ -142,13 +149,13 @@ public class MethodHandleProxies {
     public static
     <T> T asInterfaceInstance(final Class<T> intfc, final MethodHandle target) {
         if (!intfc.isInterface() || !Modifier.isPublic(intfc.getModifiers()))
-            throw new IllegalArgumentException("not a public interface: "+intfc.getName());
+            throw newIllegalArgumentException("not a public interface", intfc.getName());
         final MethodHandle mh;
         if (System.getSecurityManager() != null) {
             final Class<?> caller = Reflection.getCallerClass();
-            final ClassLoader ccl = (caller != null) ? caller.getClassLoader() : null;
+            final ClassLoader ccl = caller != null ? caller.getClassLoader() : null;
             ReflectUtil.checkProxyPackageAccess(ccl, intfc);
-            mh = maybeBindCaller(target, caller);
+            mh = ccl != null ? bindCaller(target, caller) : target;
         } else {
             mh = target;
         }
@@ -159,7 +166,7 @@ public class MethodHandleProxies {
         }
         final Method[] methods = getSingleNameMethods(intfc);
         if (methods == null)
-            throw new IllegalArgumentException("not a single-method interface: "+intfc.getName());
+            throw newIllegalArgumentException("not a single-method interface", intfc.getName());
         final MethodHandle[] vaTargets = new MethodHandle[methods.length];
         for (int i = 0; i < methods.length; i++) {
             Method sm = methods[i];
@@ -183,7 +190,7 @@ public class MethodHandleProxies {
                         return getArg(method.getName());
                     if (isObjectMethod(method))
                         return callObjectMethod(proxy, method, args);
-                    throw new InternalError("bad proxy method: "+method);
+                    throw newInternalError("bad proxy method: "+method);
                 }
             };
 
@@ -208,10 +215,7 @@ public class MethodHandleProxies {
         return intfc.cast(proxy);
     }
 
-    private static MethodHandle maybeBindCaller(MethodHandle target, Class<?> hostClass) {
-        if (hostClass == null || hostClass.getClassLoader() == null)
-            return target;
-
+    private static MethodHandle bindCaller(MethodHandle target, Class<?> hostClass) {
         MethodHandle cbmh = MethodHandleImpl.bindCaller(target, hostClass);
         if (target.isVarargsCollector()) {
             MethodType type = cbmh.type();
@@ -237,7 +241,7 @@ public class MethodHandleProxies {
                 return (WrapperInstance) x;
         } catch (ClassCastException ex) {
         }
-        throw new IllegalArgumentException("not a wrapper instance");
+        throw newIllegalArgumentException("not a wrapper instance");
     }
 
     /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -24,15 +24,12 @@
  */
 package javax.swing;
 
-import sun.swing.SwingUtilities2;
 
 import java.awt.*;
-import java.awt.event.*;
 import java.lang.reflect.*;
 import java.net.*;
 import java.util.*;
 import java.io.*;
-import java.util.*;
 
 import javax.swing.plaf.*;
 import javax.swing.text.*;
@@ -43,7 +40,7 @@ import javax.accessibility.*;
 /**
  * A text component to edit various kinds of content.
  * You can find how-to information and examples of using editor panes in
- * <a href="http://java.sun.com/docs/books/tutorial/uiswing/components/text.html">Using Text Components</a>,
+ * <a href="https://docs.oracle.com/javase/tutorial/uiswing/components/text.html">Using Text Components</a>,
  * a section in <em>The Java Tutorial.</em>
  *
  * <p>
@@ -103,7 +100,7 @@ import javax.accessibility.*;
  * fragment is a possible hyperlink listener implementation, that treats
  * HTML frame events specially, and simply displays any other activated
  * hyperlinks.
- * <code><pre>
+ * <pre>
 
 &nbsp;    class Hyperactive implements HyperlinkListener {
 &nbsp;
@@ -125,7 +122,7 @@ import javax.accessibility.*;
 &nbsp;        }
 &nbsp;    }
 
- * </pre></code>
+ * </pre>
  * <p>
  * For information on customizing how <b>text/html</b> is rendered please see
  * {@link #W3C_LENGTH_UNITS} and {@link #HONOR_DISPLAY_PROPERTIES}
@@ -179,7 +176,7 @@ import javax.accessibility.*;
  * future Swing releases. The current serialization support is
  * appropriate for short term storage or RMI between applications running
  * the same version of Swing.  As of 1.4, support for long term storage
- * of all JavaBeans<sup><font size="-2">TM</font></sup>
+ * of all JavaBeans&trade;
  * has been added to the <code>java.beans</code> package.
  * Please see {@link java.beans.XMLEncoder}.
  *
@@ -1244,7 +1241,11 @@ public class JEditorPane extends JTextComponent {
      */
     public static void registerEditorKitForContentType(String type, String classname, ClassLoader loader) {
         getKitTypeRegistry().put(type, classname);
-        getKitLoaderRegistry().put(type, loader);
+        if (loader != null) {
+            getKitLoaderRegistry().put(type, loader);
+        } else {
+            getKitLoaderRegistry().remove(type);
+        }
         getKitRegisty().remove(type);
     }
 
@@ -1636,7 +1637,7 @@ public class JEditorPane extends JTextComponent {
      * future Swing releases. The current serialization support is
      * appropriate for short term storage or RMI between applications running
      * the same version of Swing.  As of 1.4, support for long term storage
-     * of all JavaBeans<sup><font size="-2">TM</font></sup>
+     * of all JavaBeans&trade;
      * has been added to the <code>java.beans</code> package.
      * Please see {@link java.beans.XMLEncoder}.
      */
@@ -1690,7 +1691,7 @@ public class JEditorPane extends JTextComponent {
      * future Swing releases. The current serialization support is
      * appropriate for short term storage or RMI between applications running
      * the same version of Swing.  As of 1.4, support for long term storage
-     * of all JavaBeans<sup><font size="-2">TM</font></sup>
+     * of all JavaBeans&trade;
      * has been added to the <code>java.beans</code> package.
      * Please see {@link java.beans.XMLEncoder}.
      */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -44,9 +44,7 @@ import java.awt.Font;
 import java.awt.Color;
 import java.awt.Insets;
 import java.awt.Dimension;
-import java.lang.reflect.Method;
 import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeEvent;
 import java.security.AccessController;
 import java.security.AccessControlContext;
 import java.security.PrivilegedAction;
@@ -65,7 +63,7 @@ import sun.util.CoreResourceBundleControl;
  * future Swing releases. The current serialization support is
  * appropriate for short term storage or RMI between applications running
  * the same version of Swing.  As of 1.4, support for long term storage
- * of all JavaBeans<sup><font size="-2">TM</font></sup>
+ * of all JavaBeans&trade;
  * has been added to the <code>java.beans</code> package.
  * Please see {@link java.beans.XMLEncoder}.
  *
@@ -74,7 +72,7 @@ import sun.util.CoreResourceBundleControl;
  */
 public class UIDefaults extends Hashtable<Object,Object>
 {
-    private static final Object PENDING = "Pending";
+    private static final Object PENDING = new Object();
 
     private SwingPropertyChangeSupport changeSupport;
 
@@ -168,7 +166,7 @@ public class UIDefaults extends Hashtable<Object,Object>
      * Looks up up the given key in our Hashtable and resolves LazyValues
      * or ActiveValues.
      */
-    private Object getFromHashtable(Object key) {
+    private Object getFromHashtable(final Object key) {
         /* Quickly handle the common case, without grabbing
          * a lock.
          */
@@ -707,7 +705,7 @@ public class UIDefaults extends Hashtable<Object,Object>
 
 
     /**
-     * Returns the L&F class that renders this component.
+     * Returns the L&amp;F class that renders this component.
      *
      * @param uiClassID a string containing the class ID
      * @return the Class object returned by

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -44,7 +44,7 @@ import java.util.Objects;
  * display can override <code>JComponent</code>'s <code>createToolTip</code>
  * method and use a subclass of this class.
  * <p>
- * See <a href="http://java.sun.com/docs/books/tutorial/uiswing/components/tooltip.html">How to Use Tool Tips</a>
+ * See <a href="https://docs.oracle.com/javase/tutorial/uiswing/components/tooltip.html">How to Use Tool Tips</a>
  * in <em>The Java Tutorial</em>
  * for further documentation.
  * <p>
@@ -58,7 +58,7 @@ import java.util.Objects;
  * future Swing releases. The current serialization support is
  * appropriate for short term storage or RMI between applications running
  * the same version of Swing.  As of 1.4, support for long term storage
- * of all JavaBeans<sup><font size="-2">TM</font></sup>
+ * of all JavaBeans&trade;
  * has been added to the <code>java.beans</code> package.
  * Please see {@link java.beans.XMLEncoder}.
  *
@@ -67,6 +67,7 @@ import java.util.Objects;
  * @author Dave Moore
  * @author Rich Shiavi
  */
+@SuppressWarnings("serial")
 public class JToolTip extends JComponent implements Accessible {
     /**
      * @see #getUIClassID
@@ -84,7 +85,7 @@ public class JToolTip extends JComponent implements Accessible {
     }
 
     /**
-     * Returns the L&F object that renders this component.
+     * Returns the L&amp;F object that renders this component.
      *
      * @return the <code>ToolTipUI</code> object that renders this component
      */
@@ -103,7 +104,7 @@ public class JToolTip extends JComponent implements Accessible {
 
 
     /**
-     * Returns the name of the L&F class that renders this component.
+     * Returns the name of the L&amp;F class that renders this component.
      *
      * @return the string "ToolTipUI"
      * @see JComponent#getUIClassID
@@ -253,10 +254,11 @@ public class JToolTip extends JComponent implements Accessible {
      * future Swing releases. The current serialization support is
      * appropriate for short term storage or RMI between applications running
      * the same version of Swing.  As of 1.4, support for long term storage
-     * of all JavaBeans<sup><font size="-2">TM</font></sup>
+     * of all JavaBeans&trade;
      * has been added to the <code>java.beans</code> package.
      * Please see {@link java.beans.XMLEncoder}.
      */
+    @SuppressWarnings("serial")
     protected class AccessibleJToolTip extends AccessibleJComponent {
 
         /**

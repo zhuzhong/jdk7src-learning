@@ -61,7 +61,7 @@ public class Beans {
      * <p>
      * Instantiate a JavaBean.
      * </p>
-     *
+     * @return a JavaBean
      * @param     cls         the class-loader from which we should create
      *                        the bean.  If this is null, then the system
      *                        class-loader is used.
@@ -81,6 +81,7 @@ public class Beans {
      * <p>
      * Instantiate a JavaBean.
      * </p>
+     * @return a JavaBean
      *
      * @param     cls         the class-loader from which we should create
      *                        the bean.  If this is null, then the system
@@ -136,6 +137,7 @@ public class Beans {
      * the JDK appletviewer (for a reference browser environment) and the
      * BDK BeanBox (for a reference bean container).
      *
+     * @return a JavaBean
      * @param     cls         the class-loader from which we should create
      *                        the bean.  If this is null, then the system
      *                        class-loader is used.
@@ -201,7 +203,7 @@ public class Beans {
 
         if (result == null) {
             // No serialized object, try just instantiating the class
-            Class cl;
+            Class<?> cl;
 
             try {
                 cl = ClassFinder.findClass(beanName, cls);
@@ -309,7 +311,7 @@ public class Beans {
                 // now, if there is a BeanContext, add the bean, if applicable.
 
                 if (beanContext != null) {
-                    beanContext.add(result);
+                    unsafeBeanContextAdd(beanContext, result);
                 }
 
                 // If it was deserialized then it was already init-ed.
@@ -327,12 +329,16 @@ public class Beans {
                   ((BeansAppletStub)stub).active = true;
                 } else initializer.activate(applet);
 
-            } else if (beanContext != null) beanContext.add(result);
+            } else if (beanContext != null) unsafeBeanContextAdd(beanContext, result);
         }
 
         return result;
     }
 
+    @SuppressWarnings("unchecked")
+    private static void unsafeBeanContextAdd(BeanContext beanContext, Object res) {
+        beanContext.add(res);
+    }
 
     /**
      * From a given bean, obtain an object representing a specified
@@ -345,6 +351,8 @@ public class Beans {
      * This method is provided in Beans 1.0 as a hook to allow the
      * addition of more flexible bean behaviour in the future.
      *
+     * @return an object representing a specified type view of the
+     * source object
      * @param bean        Object from which we want to obtain a view.
      * @param targetType  The type of view we'd like to get.
      *
@@ -367,7 +375,6 @@ public class Beans {
     public static boolean isInstanceOf(Object bean, Class<?> targetType) {
         return Introspector.isSubclass(bean.getClass(), targetType);
     }
-
 
     /**
      * Test if we are in design-mode.
@@ -477,6 +484,7 @@ class ObjectInputStreamWithLoader extends ObjectInputStream
     /**
      * Use the given ClassLoader rather than using the system class
      */
+    @SuppressWarnings("rawtypes")
     protected Class resolveClass(ObjectStreamClass classDesc)
         throws IOException, ClassNotFoundException {
 
@@ -492,7 +500,7 @@ class ObjectInputStreamWithLoader extends ObjectInputStream
 
 class BeansAppletContext implements AppletContext {
     Applet target;
-    Hashtable imageCache = new Hashtable();
+    Hashtable<URL,Object> imageCache = new Hashtable<>();
 
     BeansAppletContext(Applet target) {
         this.target = target;
@@ -537,8 +545,8 @@ class BeansAppletContext implements AppletContext {
         return null;
     }
 
-    public Enumeration getApplets() {
-        Vector applets = new Vector();
+    public Enumeration<Applet> getApplets() {
+        Vector<Applet> applets = new Vector<>();
         applets.addElement(target);
         return applets.elements();
     }
@@ -564,7 +572,7 @@ class BeansAppletContext implements AppletContext {
         return null;
     }
 
-    public Iterator getStreamKeys(){
+    public Iterator<String> getStreamKeys(){
         // We do nothing.
         return null;
     }

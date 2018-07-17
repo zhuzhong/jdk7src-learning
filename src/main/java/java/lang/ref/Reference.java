@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -26,7 +26,8 @@
 package java.lang.ref;
 
 import sun.misc.Cleaner;
-
+import sun.misc.JavaLangRefAccess;
+import sun.misc.SharedSecrets;
 
 /**
  * Abstract base class for reference objects.  This class defines the
@@ -69,7 +70,7 @@ public abstract class Reference<T> {
      *     null.
      *
      *     Pending: queue = ReferenceQueue with which instance is registered;
-     *     next = Following instance in queue, or this if at end of list.
+     *     next = this
      *
      *     Enqueued: queue = ReferenceQueue.ENQUEUED; next = Following instance
      *     in queue, or this if at end of list.
@@ -81,17 +82,29 @@ public abstract class Reference<T> {
      * the next field is null then the instance is active; if it is non-null,
      * then the collector should treat the instance normally.
      *
-     * To ensure that concurrent collector can discover active Reference
+     * To ensure that a concurrent collector can discover active Reference
      * objects without interfering with application threads that may apply
      * the enqueue() method to those objects, collectors should link
-     * discovered objects through the discovered field.
+     * discovered objects through the discovered field. The discovered
+     * field is also used for linking Reference objects in the pending list.
      */
 
     private T referent;         /* Treated specially by GC */
 
-    ReferenceQueue<? super T> queue;
+    volatile ReferenceQueue<? super T> queue;
 
+    /* When active:   NULL
+     *     pending:   this
+     *    Enqueued:   next reference in queue (or this if last)
+     *    Inactive:   this
+     */
+    @SuppressWarnings("rawtypes")
     Reference next;
+
+    /* When active:   next element in a discovered reference list maintained by GC (or this if last)
+     *     pending:   next element in the pending list (or null if last)
+     *   otherwise:   NULL
+     */
     transient private Reference<T> discovered;  /* used by VM */
 
 
@@ -100,52 +113,109 @@ public abstract class Reference<T> {
      * therefore critical that any code holding this lock complete as quickly
      * as possible, allocate no new objects, and avoid calling user code.
      */
-    static private class Lock { };
+    static private class Lock { }
     private static Lock lock = new Lock();
 
 
     /* List of References waiting to be enqueued.  The collector adds
      * References to this list, while the Reference-handler thread removes
-     * them.  This list is protected by the above lock object.
+     * them.  This list is protected by the above lock object. The
+     * list uses the discovered field to link its elements.
      */
-    private static Reference pending = null;
+    private static Reference<Object> pending = null;
 
     /* High-priority thread to enqueue pending References
      */
     private static class ReferenceHandler extends Thread {
+
+        private static void ensureClassInitialized(Class<?> clazz) {
+            try {
+                Class.forName(clazz.getName(), true, clazz.getClassLoader());
+            } catch (ClassNotFoundException e) {
+                throw (Error) new NoClassDefFoundError(e.getMessage()).initCause(e);
+            }
+        }
+
+        static {
+            // pre-load and initialize InterruptedException and Cleaner classes
+            // so that we don't get into trouble later in the run loop if there's
+            // memory shortage while loading/initializing them lazily.
+            ensureClassInitialized(InterruptedException.class);
+            ensureClassInitialized(Cleaner.class);
+        }
 
         ReferenceHandler(ThreadGroup g, String name) {
             super(g, name);
         }
 
         public void run() {
-            for (;;) {
-
-                Reference r;
-                synchronized (lock) {
-                    if (pending != null) {
-                        r = pending;
-                        Reference rn = r.next;
-                        pending = (rn == r) ? null : rn;
-                        r.next = r;
-                    } else {
-                        try {
-                            lock.wait();
-                        } catch (InterruptedException x) { }
-                        continue;
-                    }
-                }
-
-                // Fast path for cleaners
-                if (r instanceof Cleaner) {
-                    ((Cleaner)r).clean();
-                    continue;
-                }
-
-                ReferenceQueue q = r.queue;
-                if (q != ReferenceQueue.NULL) q.enqueue(r);
+            while (true) {
+                tryHandlePending(true);
             }
         }
+    }
+
+    /**
+     * Try handle pending {@link Reference} if there is one.<p>
+     * Return {@code true} as a hint that there might be another
+     * {@link Reference} pending or {@code false} when there are no more pending
+     * {@link Reference}s at the moment and the program can do some other
+     * useful work instead of looping.
+     *
+     * @param waitForNotify if {@code true} and there was no pending
+     *                      {@link Reference}, wait until notified from VM
+     *                      or interrupted; if {@code false}, return immediately
+     *                      when there is no pending {@link Reference}.
+     * @return {@code true} if there was a {@link Reference} pending and it
+     *         was processed, or we waited for notification and either got it
+     *         or thread was interrupted before being notified;
+     *         {@code false} otherwise.
+     */
+    static boolean tryHandlePending(boolean waitForNotify) {
+        Reference<Object> r;
+        Cleaner c;
+        try {
+            synchronized (lock) {
+                if (pending != null) {
+                    r = pending;
+                    // 'instanceof' might throw OutOfMemoryError sometimes
+                    // so do this before un-linking 'r' from the 'pending' chain...
+                    c = r instanceof Cleaner ? (Cleaner) r : null;
+                    // unlink 'r' from 'pending' chain
+                    pending = r.discovered;
+                    r.discovered = null;
+                } else {
+                    // The waiting on the lock may cause an OutOfMemoryError
+                    // because it may try to allocate exception objects.
+                    if (waitForNotify) {
+                        lock.wait();
+                    }
+                    // retry if waited
+                    return waitForNotify;
+                }
+            }
+        } catch (OutOfMemoryError x) {
+            // Give other threads CPU time so they hopefully drop some live references
+            // and GC reclaims some space.
+            // Also prevent CPU intensive spinning in case 'r instanceof Cleaner' above
+            // persistently throws OOME for some time...
+            Thread.yield();
+            // retry
+            return true;
+        } catch (InterruptedException x) {
+            // retry
+            return true;
+        }
+
+        // Fast path for cleaners
+        if (c != null) {
+            c.clean();
+            return true;
+        }
+
+        ReferenceQueue<? super Object> q = r.queue;
+        if (q != ReferenceQueue.NULL) q.enqueue(r);
+        return true;
     }
 
     static {
@@ -160,8 +230,15 @@ public abstract class Reference<T> {
         handler.setPriority(Thread.MAX_PRIORITY);
         handler.setDaemon(true);
         handler.start();
-    }
 
+        // provide access in SharedSecrets
+        SharedSecrets.setJavaLangRefAccess(new JavaLangRefAccess() {
+            @Override
+            public boolean tryHandlePendingReference() {
+                return tryHandlePending(false);
+            }
+        });
+    }
 
     /* -- Referent accessor and setters -- */
 
@@ -201,11 +278,7 @@ public abstract class Reference<T> {
      *           been enqueued
      */
     public boolean isEnqueued() {
-        /* In terms of the internal states, this predicate actually tests
-           whether the instance is either Pending or Enqueued */
-        synchronized (this) {
-            return (this.queue != ReferenceQueue.NULL) && (this.next != null);
-        }
+        return (this.queue == ReferenceQueue.ENQUEUED);
     }
 
     /**

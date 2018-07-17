@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -124,7 +124,7 @@ public class NimbusLookAndFeel extends SynthLookAndFeel {
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     @Override public UIDefaults getDefaults() {
         if (uiDefaults == null){
@@ -261,7 +261,7 @@ public class NimbusLookAndFeel extends SynthLookAndFeel {
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      * @return {@code true}
      */
     @Override public boolean shouldUpdateStyleOnAncestorChanged() {
@@ -269,7 +269,7 @@ public class NimbusLookAndFeel extends SynthLookAndFeel {
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      *
      * <p>Overridden to return {@code true} when one of the following
      * properties change:

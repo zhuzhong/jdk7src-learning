@@ -1,6 +1,6 @@
-// This file was generated AUTOMATICALLY from a template file Fri Apr 10 11:31:00 PDT 2015
+// This file was generated AUTOMATICALLY from a template file Wed Mar 15 01:26:44 PDT 2017
 /*
- * Copyright (c) 2003, 2006, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -239,7 +239,7 @@ class CharacterData02 extends CharacterData {
     private CharacterData02() {};
 
     // The following tables and code generated using:
-  // java GenerateCharacter -plane 2 -template ../../tools/GenerateCharacter/CharacterData02.java.template -spec ../../tools/UnicodeData/UnicodeData.txt -specialcasing ../../tools/UnicodeData/SpecialCasing.txt -proplist ../../tools/UnicodeData/PropList.txt -o C:/re/jdk7u80/2329/build/windows-amd64/gensrc/java/lang/CharacterData02.java -string -usecharforbyte 11 4 1
+  // java GenerateCharacter -plane 2 -template c:/re/workspace/8-2-build-windows-amd64-cygwin/jdk8u131/8869/jdk/make/data/characterdata/CharacterData02.java.template -spec c:/re/workspace/8-2-build-windows-amd64-cygwin/jdk8u131/8869/jdk/make/data/unicodedata/UnicodeData.txt -specialcasing c:/re/workspace/8-2-build-windows-amd64-cygwin/jdk8u131/8869/jdk/make/data/unicodedata/SpecialCasing.txt -proplist c:/re/workspace/8-2-build-windows-amd64-cygwin/jdk8u131/8869/jdk/make/data/unicodedata/PropList.txt -o c:/re/workspace/8-2-build-windows-amd64-cygwin/jdk8u131/8869/build/windows-amd64/jdk/gensrc/java/lang/CharacterData02.java -string -usecharforbyte 11 4 1
   // The X table has 2048 entries for a total of 4096 bytes.
 
   static final char X[] = (

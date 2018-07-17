@@ -28,8 +28,10 @@ package javax.sql.rowset;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.sql.SQLException;
+import java.util.PropertyPermission;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+import javax.sql.rowset.spi.SyncFactoryException;
 import sun.reflect.misc.ReflectUtil;
 
 /**
@@ -72,7 +74,9 @@ public class RowSetProvider {
         debug = val != null && !"false".equals(val);
     }
 
-
+    /**
+     * RowSetProvider constructor
+     */
     protected RowSetProvider () {
     }
 
@@ -188,7 +192,7 @@ public class RowSetProvider {
         }
 
         try {
-            Class providerClass = getFactoryClass(factoryClassName, cl, false);
+            Class<?> providerClass = getFactoryClass(factoryClassName, cl, false);
             RowSetFactory instance = (RowSetFactory) providerClass.newInstance();
             if (debug) {
                 trace("Created new instance of " + providerClass +
@@ -236,7 +240,7 @@ public class RowSetProvider {
      * context class loader followed by the current class loader.
      *  @return The class which was loaded
      */
-    static private Class getFactoryClass(String factoryClassName, ClassLoader cl,
+    static private Class<?> getFactoryClass(String factoryClassName, ClassLoader cl,
             boolean doFallback) throws ClassNotFoundException {
         try {
             if (cl == null) {
@@ -296,10 +300,10 @@ public class RowSetProvider {
                 public String run() {
                     return System.getProperty(propName);
                 }
-            });
+            }, null, new PropertyPermission(propName, "read"));
         } catch (SecurityException se) {
+            trace("error getting " + propName + ":  "+ se);
             if (debug) {
-                trace("error getting " + propName + ":  "+ se);
                 se.printStackTrace();
             }
         }

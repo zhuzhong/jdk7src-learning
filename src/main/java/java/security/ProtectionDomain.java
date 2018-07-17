@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
  * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
  *
  *
@@ -25,15 +25,18 @@
 
 package java.security;
 
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.SoftReference;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import sun.misc.JavaSecurityProtectionDomainAccess;
 import static sun.misc.JavaSecurityProtectionDomainAccess.ProtectionDomainCache;
-import sun.misc.SharedSecrets;
 import sun.security.util.Debug;
 import sun.security.util.SecurityConstants;
 import sun.misc.JavaSecurityAccess;
@@ -60,35 +63,44 @@ import sun.misc.SharedSecrets;
  */
 
 public class ProtectionDomain {
+    private static class JavaSecurityAccessImpl implements JavaSecurityAccess {
+
+        private JavaSecurityAccessImpl() {
+        }
+
+        @Override
+        public <T> T doIntersectionPrivilege(
+                PrivilegedAction<T> action,
+                final AccessControlContext stack,
+                final AccessControlContext context) {
+            if (action == null) {
+                throw new NullPointerException();
+            }
+
+            return AccessController.doPrivileged(
+                action,
+                getCombinedACC(context, stack)
+            );
+        }
+
+        @Override
+        public <T> T doIntersectionPrivilege(
+                PrivilegedAction<T> action,
+                AccessControlContext context) {
+            return doIntersectionPrivilege(action,
+                AccessController.getContext(), context);
+        }
+
+        private static AccessControlContext getCombinedACC(AccessControlContext context, AccessControlContext stack) {
+            AccessControlContext acc = new AccessControlContext(context, stack.getCombiner(), true);
+
+            return new AccessControlContext(stack.getContext(), acc).optimize();
+        }
+    }
 
     static {
         // Set up JavaSecurityAccess in SharedSecrets
-        SharedSecrets.setJavaSecurityAccess(
-            new JavaSecurityAccess() {
-                public <T> T doIntersectionPrivilege(
-                    PrivilegedAction<T> action,
-                    final AccessControlContext stack,
-                    final AccessControlContext context)
-                {
-                    if (action == null) {
-                        throw new NullPointerException();
-                    }
-                    return AccessController.doPrivileged(
-                        action,
-                        new AccessControlContext(
-                            stack.getContext(), context).optimize()
-                    );
-                }
-
-                public <T> T doIntersectionPrivilege(
-                    PrivilegedAction<T> action,
-                    AccessControlContext context)
-                {
-                    return doIntersectionPrivilege(action,
-                        AccessController.getContext(), context);
-                }
-            }
-       );
+        SharedSecrets.setJavaSecurityAccess(new JavaSecurityAccessImpl());
     }
 
     /* CodeSource */
@@ -120,7 +132,7 @@ public class ProtectionDomain {
     /**
      * Creates a new ProtectionDomain with the given CodeSource and
      * Permissions. If the permissions object is not null, then
-     *  <code>setReadOnly())</code> will be called on the passed in
+     *  {@code setReadOnly())} will be called on the passed in
      * Permissions object. The only permissions granted to this domain
      * are the ones specified; the current Policy will not be consulted.
      *
@@ -146,7 +158,7 @@ public class ProtectionDomain {
     /**
      * Creates a new ProtectionDomain qualified by the given CodeSource,
      * Permissions, ClassLoader and array of Principals. If the
-     * permissions object is not null, then <code>setReadOnly()</code>
+     * permissions object is not null, then {@code setReadOnly()}
      * will be called on the passed in Permissions object.
      * The permissions granted to this domain are dynamic; they include
      * both the static permissions passed to this constructor, and any
@@ -156,7 +168,7 @@ public class ProtectionDomain {
      * This constructor is typically used by
      * {@link SecureClassLoader ClassLoaders}
      * and {@link DomainCombiner DomainCombiners} which delegate to
-     * <code>Policy</code> to actively associate the permissions granted to
+     * {@code Policy} to actively associate the permissions granted to
      * this domain. This constructor affords the
      * Policy provider the opportunity to augment the supplied
      * PermissionCollection to reflect policy changes.
@@ -402,13 +414,13 @@ public class ProtectionDomain {
         if (perms != null && permissions != null) {
             //
             // Weed out the duplicates from the policy. Unless a refresh
-            // has occured since the pd was consed this should result in
+            // has occurred since the pd was consed this should result in
             // an empty vector.
             synchronized (permissions) {
                 e = permissions.elements();   // domain vs policy
                 while (e.hasMoreElements()) {
                     Permission pdp = e.nextElement();
-                    Class pdpClass = pdp.getClass();
+                    Class<?> pdpClass = pdp.getClass();
                     String pdpActions = pdp.getActions();
                     String pdpName = pdp.getName();
                     for (int i = 0; i < plVector.size(); i++) {
@@ -448,25 +460,135 @@ public class ProtectionDomain {
     /**
      * Used for storing ProtectionDomains as keys in a Map.
      */
-    final class Key {}
+    static final class Key {}
 
     static {
         SharedSecrets.setJavaSecurityProtectionDomainAccess(
             new JavaSecurityProtectionDomainAccess() {
+                @Override
                 public ProtectionDomainCache getProtectionDomainCache() {
-                    return new ProtectionDomainCache() {
-                        private final Map<Key, PermissionCollection> map =
-                            Collections.synchronizedMap
-                                (new WeakHashMap<Key, PermissionCollection>());
-                        public void put(ProtectionDomain pd,
-                            PermissionCollection pc) {
-                            map.put((pd == null ? null : pd.key), pc);
-                        }
-                        public PermissionCollection get(ProtectionDomain pd) {
-                            return pd == null ? map.get(null) : map.get(pd.key);
-                        }
-                    };
+                    return new PDCache();
+                }
+
+                @Override
+                public boolean getStaticPermissionsField(ProtectionDomain pd) {
+                    return pd.staticPermissions;
                 }
             });
+    }
+
+    /**
+     * A cache of ProtectionDomains and their Permissions.
+     *
+     * This class stores ProtectionDomains as weak keys in a ConcurrentHashMap
+     * with additional support for checking and removing weak keys that are no
+     * longer in use. There can be cases where the permission collection may
+     * have a chain of strong references back to the ProtectionDomain, which
+     * ordinarily would prevent the entry from being removed from the map. To
+     * address that, we wrap the permission collection in a SoftReference so
+     * that it can be reclaimed by the garbage collector due to memory demand.
+     */
+    private static class PDCache implements ProtectionDomainCache {
+        private final ConcurrentHashMap<WeakProtectionDomainKey,
+                                        SoftReference<PermissionCollection>>
+                                        pdMap = new ConcurrentHashMap<>();
+        private final ReferenceQueue<Key> queue = new ReferenceQueue<>();
+
+        @Override
+        public void put(ProtectionDomain pd, PermissionCollection pc) {
+            processQueue(queue, pdMap);
+            WeakProtectionDomainKey weakPd =
+                new WeakProtectionDomainKey(pd, queue);
+            pdMap.put(weakPd, new SoftReference<>(pc));
+        }
+
+        @Override
+        public PermissionCollection get(ProtectionDomain pd) {
+            processQueue(queue, pdMap);
+            WeakProtectionDomainKey weakPd = new WeakProtectionDomainKey(pd);
+            SoftReference<PermissionCollection> sr = pdMap.get(weakPd);
+            return (sr == null) ? null : sr.get();
+        }
+
+        /**
+         * Removes weak keys from the map that have been enqueued
+         * on the reference queue and are no longer in use.
+         */
+        private static void processQueue(ReferenceQueue<Key> queue,
+                                         ConcurrentHashMap<? extends
+                                         WeakReference<Key>, ?> pdMap) {
+            Reference<? extends Key> ref;
+            while ((ref = queue.poll()) != null) {
+                pdMap.remove(ref);
+            }
+        }
+    }
+
+    /**
+     * A weak key for a ProtectionDomain.
+     */
+    private static class WeakProtectionDomainKey extends WeakReference<Key> {
+        /**
+         * Saved value of the referent's identity hash code, to maintain
+         * a consistent hash code after the referent has been cleared
+         */
+        private final int hash;
+
+        /**
+         * A key representing a null ProtectionDomain.
+         */
+        private static final Key NULL_KEY = new Key();
+
+        /**
+         * Create a new WeakProtectionDomain with the specified domain and
+         * registered with a queue.
+         */
+        WeakProtectionDomainKey(ProtectionDomain pd, ReferenceQueue<Key> rq) {
+            this((pd == null ? NULL_KEY : pd.key), rq);
+        }
+
+        WeakProtectionDomainKey(ProtectionDomain pd) {
+            this(pd == null ? NULL_KEY : pd.key);
+        }
+
+        private WeakProtectionDomainKey(Key key, ReferenceQueue<Key> rq) {
+            super(key, rq);
+            hash = key.hashCode();
+        }
+
+        private WeakProtectionDomainKey(Key key) {
+            super(key);
+            hash = key.hashCode();
+        }
+
+        /**
+         * Returns the identity hash code of the original referent.
+         */
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        /**
+         * Returns true if the given object is an identical
+         * WeakProtectionDomainKey instance, or, if this object's referent
+         * has not been cleared and the given object is another
+         * WeakProtectionDomainKey instance with an identical non-null
+         * referent as this one.
+         */
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) {
+                return true;
+            }
+
+            if (obj instanceof WeakProtectionDomainKey) {
+                Object referent = get();
+                return (referent != null) &&
+                       (referent == ((WeakProtectionDomainKey)obj).get());
+            } else {
+                return false;
+            }
+        }
     }
 }
